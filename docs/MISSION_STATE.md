@@ -32,7 +32,7 @@
 ## Blocked (founder actions)
 
 1. **Network access for this build environment.** Open the menu after the chat title, choose **Edit cloud environment**, then **Network access** → **Custom**. Keep the Trusted defaults and add `world.openfoodfacts.org` and `static.openfoodfacts.org`.
-2. **The GitHub repo.** Create `hourglazlabs-x/mindmodx-scan`, empty and private. If you'd rather keep it under the `labsanalytix` account, install the Claude GitHub app there and say so.
+2. ~~The GitHub repo.~~ Done on 2026-11-22: [`hourglazlabs-x/scan`](https://github.com/hourglazlabs-x/scan), with run 1 pushed. It's public; switch it to private in GitHub settings if the code and rubric should stay private.
 
 ## Next steps, in order
 

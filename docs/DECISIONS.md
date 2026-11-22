@@ -18,7 +18,7 @@ Newest at the bottom. "Founder" means the founder chose or approved it. "Lead" m
 
 | # | Decision | Why | By |
 | --- | --- | --- | --- |
-| R1 | **Repo:** private, `hourglazlabs-x/mindmodx-scan`. **Build network:** Trusted plus Open Food Facts domains. | | Founder |
+| R1 | **Repo:** `hourglazlabs-x/scan`, created 2026-11-22. It was planned as private and was created public. **Build network:** package registries plus Open Food Facts domains. | | Founder |
 | R2 | **Logic tests use `node:test`, not Jest.** Component tests come later. | They run with zero dependencies, including in the build environment with installs blocked, and on a future server. | Lead |
 | R3 | **Modules that run under plain Node import with explicit `.ts` extensions.** | Node's TypeScript type stripping requires it. Metro resolves them, and the app's tsconfig allows them. | Lead |
 | R4 | **Rubric v0.1:** thresholds from the UK front-of-pack criteria and EU claim conditions. Weights are placeholders. The additive list is short. | Real thresholds, but the philosophy is the founder's to set. An additive that isn't on the list is "unrated", never "safe". | Lead (draft) |

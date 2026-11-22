@@ -28,8 +28,8 @@ Object mode is next. It needs an online image model, so for now it's a placehold
 **Steps:**
 
 ```bash
-git clone https://github.com/hourglazlabs-x/mindmodx-scan.git
-cd mindmodx-scan
+git clone https://github.com/hourglazlabs-x/scan.git
+cd scan
 npm install
 npx expo start
 ```
