@@ -15,7 +15,9 @@ const MISSING_TEXT: Record<MissingInput, string> = {
 export function summarize(hits: RuleHit[], missing: MissingInput[]): string {
   if (missing.length > 0) {
     const what = joinList(missing.map((m) => MISSING_TEXT[m]));
-    return `Not scored: ${what} ${missing.length === 1 ? 'is' : 'are'} missing.`;
+    // "the nutrition facts" is plural on its own.
+    const plural = missing.length > 1 || missing[0] === 'nutrition';
+    return `Not scored: ${what} ${plural ? 'are' : 'is'} missing.`;
   }
 
   const penalties = hits

@@ -136,14 +136,29 @@ The score is 28, graded **Poor**. Summary: "Added sodium nitrite and high salt o
 
 In processing, NOVA 4 counts −20 and the processed-meat rule counts 0, because the pillar is already at 0.
 
+## Scores of real products
+
+Seven real Open Food Facts records, fetched 2026-11-22 and kept as test fixtures in `test/fixtures/off/real`. These are rubric v0.1 scores, not verdicts.
+
+| Product | Barcode | Score | Summary |
+| --- | --- | --- | --- |
+| Rolled oats | 0030000010402 | 100 Optimal | The high fiber offsets moderate fat. |
+| Cola, 330 ml can | 5449000000996 | 62 Caution | Ultra-processing and added sulfite ammonia caramel lower the score. |
+| Zero-sugar cola, 330 ml can | 5449000131805 | 60 Caution | Ultra-processing and added sulfite ammonia caramel lower the score. |
+| Thai peanut noodle kit | 0737628064502 | 56 Caution | Ultra-processing and moderate salt lower the score. |
+| Hazelnut cocoa spread | 3017620422003 | 46 Caution | High sugars and high saturated fat lower the score. |
+| Cola, US 12 oz can (UPC-E 04963406) | 0049000006346 | Incomplete | Not scored: the nutrition facts are missing. Its sodium is entered in grams instead of milligrams, so salt is dropped as implausible. |
+| Diet cola, US 12 oz can (UPC-E 04965802) | 0049000006582 | Incomplete | Not scored: the ingredient list and the processing level are missing. |
+
 ## Known issues with the draft weights
 
-These came from the independent review. They are rubric questions for the founder, not code bugs.
+The first four came from the independent review, the fifth from the real products above. They are rubric questions for the founder, not code bugs.
 
-- **Regular versus diet cola.** Regular cola (medium sugar per 100 ml) scores about 62 Caution. Diet cola (aspartame, rated moderate) scores about 60 Caution. The sugared drink ranks higher.
+- **Regular versus diet cola.** The real records confirm it: regular cola (medium sugar per 100 ml) scores 62 Caution and zero-sugar cola (aspartame, rated moderate) 60 Caution. The sugared drink ranks higher.
 - **Additives missing from US labels.** US ingredient lists often name additives without E-numbers. Open Food Facts still maps many of them, but "uncured" meats cured with celery powder carry natural nitrite that no E250 tag will catch.
 - **Protein bonus on low-energy foods.** A 5 kcal broth with 0.5 g protein qualifies as "high protein" by share of energy. A minimum amount per 100 g may be wanted.
 - **Repeated additives.** With the current weights, a second high-risk additive changes nothing, and neither does the processed-meat rule on a NOVA 4 product. Both still show in the breakdown with counted 0.
+- **A cut-short ingredient list looks clean.** The hazelnut spread's record lists only "sugar, palm oil", so Open Food Facts gives it NOVA 3 and finds no additives, and it keeps the full additives and processing pillars: 46 Caution. Its label also lists lecithin and vanillin, which would likely make it NOVA 4 (−20, about 26 Poor). The app can't yet tell a cut-short list from a complete one.
 
 Before testers see scores, score about 20 well-known US products and review them.
 

@@ -4,7 +4,7 @@
 
 Scan a grocery barcode and get a **NUÏTRIX score** with the reasons behind it. Every product you scan joins your **Index**. The app works offline for anything it has already seen.
 
-> **Status: prototype (run 1), not yet run on a phone.** The scoring engine, the Open Food Facts layer and storage are tested (see `npm test`). The screens are written but haven't been compiled against the Expo packages yet, because package installs were blocked in the build environment. The next step is `npx expo install` for the dependencies, then a first run on a device ([docs/MISSION_STATE.md](docs/MISSION_STATE.md)). The scoring rules are a draft for founder review ([docs/RUBRIC.md](docs/RUBRIC.md)). Product data comes from Open Food Facts.
+> **Status: prototype, not yet opened on a phone.** The app compiles against Expo SDK 58 and builds for iOS. The tests cover the scoring engine, the Open Food Facts layer and storage, including seven real Open Food Facts products (see `npm test`). Next is a first run in Expo Go ([docs/MISSION_STATE.md](docs/MISSION_STATE.md)). The scoring rules are a draft for founder review ([docs/RUBRIC.md](docs/RUBRIC.md)). Product data comes from Open Food Facts.
 
 ## What's built
 
@@ -21,8 +21,8 @@ Object mode is next. It needs an online image model, so for now it's a placehold
 
 **You need:**
 
-- **Expo Go** on your iPhone (free on the App Store)
-- **Node.js 22.18 or newer** on your Mac ([nodejs.org](https://nodejs.org), the LTS version). The tests run TypeScript directly, which needs 22.18 or newer.
+- **Expo Go** on your iPhone (free on the App Store). This project uses Expo SDK 58, which needs Expo Go 58 or newer.
+- **Node.js 22.18 or newer** on your Mac ([nodejs.org](https://nodejs.org), the LTS version). Check with `node -v`. The tests run TypeScript directly, which needs 22.18 or newer.
 - your Mac and iPhone on the same Wi-Fi
 
 **Steps:**
@@ -36,7 +36,9 @@ npx expo start
 
 A QR code appears in the terminal. Point the iPhone's Camera app at it and tap the banner, and the app opens in Expo Go. Allow the camera when asked.
 
-If the phone can't reach your Mac (for example on a guest network), run `npx expo start --tunnel` instead.
+If Expo Go asks to find devices on your local network, tap **Allow**; without it the phone can't reach your Mac. If you tapped Don't Allow, turn it on in **Settings → Privacy & Security → Local Network → Expo Go**. If your Mac asks whether `node` may accept incoming connections, click **Allow**.
+
+If the phone still can't reach your Mac (for example on a guest network), run `npx expo start --tunnel` instead.
 
 ## Commands
 

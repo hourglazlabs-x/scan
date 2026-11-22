@@ -1,9 +1,11 @@
 # Mission state
 
-**Updated:** 2026-11-21, end of build run 1
-**Phase:** 1, prototype. The code is written and the logic is tested; it hasn't run on a phone yet.
+**Updated:** 2026-11-22, after the install run
+**Phase:** 1, prototype. The app compiles and builds for iOS, and the logic is tested against real products. It hasn't been opened on a phone yet.
 
-## Done in run 1
+## Done
+
+### Run 1 (2026-11-21)
 
 - **Scoring engine** (`src/rubric`), with draft rubric v0.1 and a strict validator. "Counted" points keep explanations honest when a pillar is clamped.
 - **Open Food Facts layer** (`src/off`): client, normalizer, barcode rules (one canonical key) and a shared rate limiter.
@@ -12,52 +14,43 @@
 - **Offline pack builder** (`scripts/build-pack.ts`).
 - **Release check** (`npm run check:release`). It fails while placeholders or a draft rubric remain.
 - **Independent review**: every confirmed finding was fixed. The remaining rubric questions are listed in [RUBRIC.md](RUBRIC.md#known-issues-with-the-draft-weights).
-- **Tests and type checks**: all `node --test` tests pass, and the strict type check of the logic code is clean.
+
+### Install run (2026-11-22)
+
+- **Dependencies installed:** Expo SDK 58.0.26, React Native 0.88.1 and React 19.3.0 ([DECISIONS.md](DECISIONS.md), R24). The lockfile is committed.
+- **The whole app compiles.** `npm run typecheck` and `npm run lint` are clean, and `npx expo export --platform ios` builds the iOS bundle.
+- **Fixes the compiler and linter found:**
+  - `StyleSheet.absoluteFill` replaces `absoluteFillObject`, which React Native 0.88 removed.
+  - Navigation hooks come from expo-router, which carries its own navigation context.
+  - The custom tab bar is typed against expo-router's tabs.
+  - Fonts are imported one weight at a time, so the app carries only the seven font files it uses.
+  - Three places that broke React's rules for hooks.
+- **Real Open Food Facts data.** Seven real records are now test fixtures (`test/fixtures/off/real`). They confirmed the UPC-A and UPC-E keys, how `ingredients_n` is set, and that categories run from general to specific. They also found a unit error, now caught by a plausibility check (R25). Their scores are in [RUBRIC.md](RUBRIC.md#scores-of-real-products).
+- **Tests:** all 142 pass.
 
 ## Not verified yet
 
-- **The app has never been compiled against the real Expo packages, or run on a device.** Package installs were blocked in the build environment all day. Expect a round of compile fixes.
-- **Library APIs assumed without being checked** (listed in the run-1 agent reports, condensed here):
-  - **expo-camera:** `CameraView`, `onBarcodeScanned`, `barcodeScannerSettings`, `enableTorch`, `onMountError`, `takePictureAsync`, `useCameraPermissions`
-  - **expo-sqlite:** `SQLiteProvider` with `onInit` and `onError`, `useSQLiteContext`, and the async query methods
-  - **expo-file-system:** the SDK 54+ `File` and `Directory` API
-  - **netinfo:** `configure` with `reachabilityShouldRun`, and `addEventListener`
-  - **expo-router:** `Tabs` with a custom `tabBar`, nested `product/[code]` routes, `unstable_settings`
-  - **Font packages:** `@expo-google-fonts/michroma`, `geist` and `geist-mono`, and their export names
-- **Real Open Food Facts data.** All test fixtures are synthetic, because Open Food Facts couldn't be reached. Points to check against real responses:
-  - when `additives_n` and `ingredients_n` are set
-  - how UPC-A codes and 13-digit EAN codes resolve
-  - the order of `categories_tags`
+- **A run on a phone.** These compile against the real packages, but only a device run shows they work:
+  - the camera: barcode reading, the torch, and the message when the camera fails to start
+  - SQLite: migrations and queries on the phone
+  - saving the ingredient photo
+  - online and offline detection
+  - the fonts, and each screen against the design canvas
+- **Scores for the products testers will scan.** Seven real products have been scored. About 20 more well-known US products should be reviewed before testers see scores.
 
 ## Blocked (founder actions)
 
-1. **Network access for this build environment.** Open the menu after the chat title, choose **Edit cloud environment**, then **Network access** → **Custom**. Keep the Trusted defaults and add `world.openfoodfacts.org` and `static.openfoodfacts.org`.
-2. ~~The GitHub repo.~~ Done on 2026-11-22: [`hourglazlabs-x/scan`](https://github.com/hourglazlabs-x/scan), with run 1 pushed. It's public; switch it to private in GitHub settings if the code and rubric should stay private.
+Nothing is blocked. Network access and the GitHub repo are done. The repo, [`hourglazlabs-x/scan`](https://github.com/hourglazlabs-x/scan), is public; switch it to private in GitHub settings if the code and rubric should stay private.
 
 ## Next steps, in order
 
-1. **Install dependencies.** Run this inside the repo:
-
-   ```bash
-   npm install expo@latest
-   npx expo install expo-router expo-camera expo-sqlite expo-file-system expo-haptics expo-image \
-     expo-linking expo-splash-screen expo-status-bar expo-font expo-constants react-native-svg \
-     react-native-safe-area-context react-native-screens @react-navigation/native \
-     @react-navigation/bottom-tabs @react-native-community/netinfo \
-     @expo-google-fonts/michroma @expo-google-fonts/geist @expo-google-fonts/geist-mono
-   npx expo install -- --save-dev typescript @types/react @types/node eslint eslint-config-expo prettier
-   npx expo install --check
-   ```
-
-   Then commit the lockfile.
-2. **Get it compiling.** Run `npm run typecheck`, `npm run lint` and `npm test`, and fix every error.
-3. **Use real fixtures.** Fetch about 10 real Open Food Facts records (ham, cola, oats, yogurt, trail mix, and a UPC-E product) to replace the synthetic fixtures, then re-check the normalizer's assumptions.
-4. **First device run (founder).** Install Expo Go, then follow the README steps. Scan 20 well-known US products and review their scores.
-5. **Rubric v1 (founder).** Decide the weights, the additive list, the bonuses and the grade bands, and check every source. See [RUBRIC.md](RUBRIC.md#decisions-for-the-founder).
-6. **Offline pack in the app.** Download a pack over Wi-Fi on first launch and merge it into the cache.
-7. **Development build.** Needs an Apple Developer account. Adds on-device text reading for ingredient photos, and TestFlight.
-8. **Server.** Holds the API keys, a shared cache, AI summaries, and the YouTube, Amazon and Wikipedia extras.
-9. **Object mode.**
+1. **First device run (founder).** Install Expo Go, then follow the README steps. Scan 20 well-known US products and review their scores.
+2. **Rubric v1 (founder).** Decide the weights, the additive list, the bonuses and the grade bands, and check every source. See [RUBRIC.md](RUBRIC.md#decisions-for-the-founder).
+3. **Cut-short ingredient lists.** Find a signal in Open Food Facts records for an incomplete list, so such products show as Incomplete instead of scoring clean ([RUBRIC.md](RUBRIC.md#known-issues-with-the-draft-weights)).
+4. **Offline pack in the app.** Download a pack over Wi-Fi on first launch and merge it into the cache.
+5. **Development build.** Needs an Apple Developer account. Adds on-device text reading for ingredient photos, and TestFlight.
+6. **Server.** Holds the API keys, a shared cache, AI summaries, and the YouTube, Amazon and Wikipedia extras.
+7. **Object mode.**
 
 ## Open founder decisions
 

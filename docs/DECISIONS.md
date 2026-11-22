@@ -46,3 +46,11 @@ Newest at the bottom. "Founder" means the founder chose or approved it. "Lead" m
 | R21 | **One canonical barcode key everywhere,** applied to the camera result before lookup. UPC-E expands to UPC-A; UPC-A becomes 13 digits. | So a product never gets two cache or Index rows. | Lead |
 | R22 | **NetInfo is configured never to ping third parties.** | Its default reachability check calls Google, which contradicts "a lookup sends only the barcode". | Lead |
 | R23 | **Product photos are credited as CC BY-SA, separately from the ODbL data.** | Open Food Facts licenses photos differently from the database. | Lead |
+
+## Install run (2026-11-22)
+
+| # | Decision | Why | By |
+| --- | --- | --- | --- |
+| R24 | **Expo SDK 58** (React Native 0.88, React 19.3), the current release. | Expo Go 58 is on the App Store, so the prototype still needs no Apple Developer account (P6). | Lead |
+| R25 | **Implausible nutrient values are dropped, not scored:** salt above 2.5 g per 100 ml in a drink, and saturated fat above total fat. Saturated fat is 0 when total fat is 0. A dropped value counts as missing, so the product shows as Incomplete. | A real record for a 12 oz cola enters sodium in grams instead of milligrams, which would score as 31.7 g salt per 100 ml. | Lead |
+| R26 | **Seven real Open Food Facts records join the synthetic fixtures** (updates R14). They're credited under the ODbL in their folder's README. The synthetic fixtures stay for edge cases real data rarely shows. | Real records found the unit error in R25 and confirmed the barcode keys (R7, R21). | Lead |

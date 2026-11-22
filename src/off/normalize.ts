@@ -17,6 +17,13 @@ const MAX_GRAMS = 100;
 const MAX_KCAL = 900;
 const KJ_PER_KCAL = 4.184;
 const SALT_PER_SODIUM = 2.5;
+/**
+ * No drink holds more than this much salt per 100 ml (seawater is about 3.5 g,
+ * and nobody files it as a beverage). Higher values are almost always sodium
+ * entered in g instead of mg: real OFF records for a 12 oz cola can list
+ * "45 g" sodium per serving, which becomes 31.7 g salt per 100 ml.
+ */
+const DRINK_MAX_SALT = 2.5;
 
 /**
  * Basis rule: a product is a drink when its categories include
@@ -30,8 +37,7 @@ const DRINK_TAG = 'en:beverages';
 
 const NUMBER_TEXT = /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i;
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const isNotFoundStatus = (status: unknown): boolean => status === 0 || status === '0' || status === 'failure';
 
@@ -86,7 +92,8 @@ function readNutrients(value: unknown): Nutrients {
   const kcal = (key: string, scale = 1) => read(key, MAX_KCAL, 1, scale);
   return compact<Nutrients>({
     // energy_100g is OFF's energy in kJ.
-    energyKcal: kcal('energy-kcal_100g') ?? kcal('energy-kj_100g', 1 / KJ_PER_KCAL) ?? kcal('energy_100g', 1 / KJ_PER_KCAL),
+    energyKcal:
+      kcal('energy-kcal_100g') ?? kcal('energy-kj_100g', 1 / KJ_PER_KCAL) ?? kcal('energy_100g', 1 / KJ_PER_KCAL),
     fat: grams('fat_100g'),
     saturatedFat: grams('saturated-fat_100g'),
     sugars: grams('sugars_100g'),
@@ -94,6 +101,23 @@ function readNutrients(value: unknown): Nutrients {
     proteins: grams('proteins_100g'),
     fiber: grams('fiber_100g'),
   });
+}
+
+/**
+ * Drops values that contradict each other or the kind of product, and fills
+ * the one value that follows from another. A dropped value counts as missing,
+ * so the product shows as Incomplete instead of getting a wrong verdict.
+ * - A drink with more salt than DRINK_MAX_SALT: unit error, salt unknown.
+ * - Saturated fat above total fat: one of them is wrong, saturated fat unknown.
+ * - No saturated fat given but zero fat: saturated fat is part of fat, so 0.
+ */
+export function checkNutrients(nutrients: Nutrients, basis: Product['basis']): Nutrients {
+  const out: Nutrients = { ...nutrients };
+  if (basis === 'drink' && out.salt !== undefined && out.salt > DRINK_MAX_SALT) delete out.salt;
+  if (out.saturatedFat !== undefined && out.fat !== undefined && out.saturatedFat > out.fat + 0.1)
+    delete out.saturatedFat;
+  if (out.saturatedFat === undefined && out.fat === 0) out.saturatedFat = 0;
+  return out;
 }
 
 /**
@@ -181,13 +205,14 @@ export function normalizeOffProduct(raw: unknown, fetchedAt: string): Product | 
 
   const p: OffProduct = record;
   const categories = strings(p.categories_tags);
+  const basis: Product['basis'] = categories.includes(DRINK_TAG) ? 'drink' : 'food';
   return compact<Product>({
     code: productKey(code),
     name: text(p.product_name_en) ?? text(p.product_name),
     brand: firstBrand(p.brands),
     quantity: text(p.quantity),
-    basis: categories.includes(DRINK_TAG) ? 'drink' : 'food',
-    nutrients: readNutrients(p.nutriments),
+    basis,
+    nutrients: checkNutrients(readNutrients(p.nutriments), basis),
     ingredientsText: text(p.ingredients_text_en) ?? text(p.ingredients_text),
     additives: readAdditives(p),
     novaGroup: readNova(p.nova_group),
