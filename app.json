@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "MINDMODX Scan",
+    "slug": "mindmodx-scan",
+    "version": "0.1.0",
+    "scheme": "mindmodxscan",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F2F4F7"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.labsanalytix.mindmodxscan"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MINDMODX Scan uses the camera to read barcodes and photograph ingredient lists."
+        }
+      ],
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "experiments": {}
+  }
+}

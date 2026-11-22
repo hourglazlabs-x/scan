@@ -1,0 +1,206 @@
+// Tests for the Open Food Facts normalizer. The fixtures in test/fixtures/off
+// are synthetic records in the OFF API v2 shape. Run with: npm test
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import type { Product } from '../src/domain/types.ts';
+import { categoryLabel, normalizeOffProduct, offNumber } from '../src/off/normalize.ts';
+import { scoreProduct } from '../src/rubric/engine.ts';
+import { FETCHED_AT, fixture, loadRubric } from './helpers.ts';
+
+const rubric = loadRubric();
+const normalize = (raw: unknown) => normalizeOffProduct(raw, FETCHED_AT);
+const withNutriments = (nutriments: Record<string, unknown>) =>
+  normalize({ code: '0400000000046', nutriments })?.nutrients;
+
+function product(name: string): Product {
+  const p = normalize(fixture(name));
+  assert.ok(p, `${name} normalizes`);
+  return p;
+}
+
+test('a complete product maps every field', () => {
+  const expected: Product = {
+    code: '0412345678903',
+    name: 'Smoked ham, sliced',
+    brand: 'Example Smokehouse',
+    quantity: '9 oz (255 g)',
+    basis: 'food',
+    nutrients: { energyKcal: 110, fat: 4, saturatedFat: 2.1, sugars: 1, salt: 2.6, proteins: 17, fiber: 0 },
+    ingredientsText: 'Pork, water, salt, dextrose, sodium phosphate, sodium ascorbate, sodium nitrite.',
+    additives: ['e250', 'e301', 'e451'],
+    novaGroup: 4,
+    categories: ['en:meats-and-their-products', 'en:meats', 'en:prepared-meats', 'en:hams', 'fr:jambons-fumes-en-tranches'],
+    imageUrl: 'https://images.openfoodfacts.org/images/products/041/234/567/8903/front_en.4.400.jpg',
+    source: { name: 'Open Food Facts', fetchedAt: FETCHED_AT, lastModified: 1763251200 },
+  };
+  assert.deepEqual(product('found-complete'), expected);
+  // Same numbers as the hand-built ham in rubric.test.ts, so the same score.
+  const r = scoreProduct(product('found-complete'), rubric);
+  assert.equal(r.score, 28);
+  assert.equal(r.grade, 'poor');
+});
+
+test('the full API response and the bare product (bulk export shape) give the same Product', () => {
+  const response = fixture('found-complete') as { product: unknown };
+  assert.deepEqual(normalize(response.product), normalize(response));
+});
+
+test('a normalized product survives a JSON round trip unchanged (no undefined keys)', () => {
+  for (const name of ['found-complete', 'missing-ingredients', 'no-additives', 'bare-strings', 'drink', 'absurd']) {
+    const p = product(name);
+    assert.deepEqual(JSON.parse(JSON.stringify(p)), p, name);
+  }
+});
+
+test('missing ingredients: additives are unknown (undefined), not "none"', () => {
+  const p = product('missing-ingredients');
+  // The fixture has additives_tags ["en:e330"] but blank ingredient texts and no additives_n.
+  assert.equal(p.additives, undefined);
+  assert.equal('additives' in p, false);
+  assert.equal(p.ingredientsText, undefined);
+  assert.equal(p.novaGroup, undefined);
+  const r = scoreProduct(p, rubric);
+  assert.equal(r.grade, 'incomplete');
+  assert.deepEqual(r.missing, ['ingredients', 'processing']);
+});
+
+test('additives_n 0 with no tags: analysed, and none found (additives [])', () => {
+  const p = product('no-additives');
+  assert.deepEqual(p.additives, []);
+  assert.equal(p.ingredientsText, undefined);
+  assert.equal(scoreProduct(p, rubric).pillars.find((x) => x.id === 'additives')?.value, 30);
+});
+
+test('a known ingredient list makes additives known, with or without tags', () => {
+  const base = fixture('missing-ingredients') as { product: Record<string, unknown> };
+  const withText = { ...base.product, ingredients_text: 'Peanuts, raisins, salt.' };
+  assert.deepEqual(normalize({ ...withText, additives_tags: undefined })?.additives, []);
+  assert.deepEqual(normalize(withText)?.additives, ['e330']);
+  // Tags are normalized, deduplicated and sorted.
+  assert.deepEqual(normalize({ ...withText, additives_tags: ['en:e330', 'en:E250', 'fr:e-330', 7] })?.additives, ['e250', 'e330']);
+  // A negative or non-numeric additives_n does not count as analysed.
+  assert.equal(normalize({ ...base.product, additives_n: -1 })?.additives, undefined);
+  assert.equal(normalize({ ...base.product, additives_n: 'n/a' })?.additives, undefined);
+});
+
+test('numbers as strings, in the bare export shape, with salt and energy derived', () => {
+  const expected: Product = {
+    // The 12-digit UPC-A in the record is stored in its 13-digit lookup form.
+    code: '0400000000046',
+    name: 'Rolled oats',
+    brand: 'Example Mills',
+    quantity: '18 oz (510 g)',
+    basis: 'food',
+    nutrients: { energyKcal: 375, fat: 6.5, saturatedFat: 1.2, sugars: 1, salt: 0.01, proteins: 13, fiber: 10 },
+    ingredientsText: 'Whole grain rolled oats.',
+    additives: [],
+    novaGroup: 1,
+    categories: ['en:plant-based-foods-and-beverages', 'en:cereals-and-potatoes', 'en:breakfast-cereals', 'en:rolled-oats'],
+    source: { name: 'Open Food Facts', fetchedAt: FETCHED_AT, lastModified: 1763251200 },
+  };
+  assert.deepEqual(product('bare-strings'), expected);
+  // Same numbers as the rolled oats in rubric.test.ts.
+  assert.equal(scoreProduct(product('bare-strings'), rubric).score, 100);
+});
+
+test('salt only as sodium: salt = sodium × 2.5', () => {
+  assert.equal(withNutriments({ sodium_100g: 0.4 })?.salt, 1);
+  assert.equal(withNutriments({ sodium_100g: '0.12' })?.salt, 0.3);
+  // A given salt value wins over sodium.
+  assert.equal(withNutriments({ salt_100g: 0.5, sodium_100g: 0.4 })?.salt, 0.5);
+  assert.equal(withNutriments({})?.salt, undefined);
+});
+
+test('energy only in kJ: kcal = kJ ÷ 4.184 (energy-kj_100g first, then energy_100g)', () => {
+  assert.equal(withNutriments({ 'energy-kj_100g': 1569 })?.energyKcal, 375);
+  assert.equal(withNutriments({ energy_100g: 176 })?.energyKcal, 42.1);
+  assert.equal(withNutriments({ 'energy-kj_100g': 1000, energy_100g: 2000 })?.energyKcal, 239);
+  assert.equal(withNutriments({ 'energy-kcal_100g': 42, 'energy-kj_100g': 999 })?.energyKcal, 42);
+});
+
+test('floating-point noise is rounded away, so 0.3 g of salt stays "low"', () => {
+  assert.equal(withNutriments({ salt_100g: 0.30000000000000004 })?.salt, 0.3);
+  const oats = product('bare-strings');
+  const salt = (value: number) =>
+    scoreProduct({ ...oats, nutrients: { ...oats.nutrients, salt: value } }, rubric).hits.find((h) => h.ruleId === 'NX-N01');
+  assert.equal(salt(withNutriments({ salt_100g: 0.30000000000000004 })?.salt ?? NaN)?.points, 0);
+});
+
+test('drinks: the en:beverages tag switches to per-100 ml thresholds', () => {
+  const cola = product('drink');
+  assert.equal(cola.basis, 'drink');
+  assert.equal(cola.nutrients.energyKcal, 42.1);
+  assert.equal(cola.nutrients.fiber, undefined);
+  const sugar = scoreProduct(cola, rubric).hits.find((h) => h.ruleId === 'NX-N02');
+  assert.equal(sugar?.label, 'Sugars 10.6 g per 100 ml');
+  assert.equal(sugar?.points, -8);
+  // The tag must match exactly: "en:plant-based-foods-and-beverages" is food.
+  assert.equal(product('no-additives').basis, 'food');
+});
+
+test('absurd values are dropped, and the fallbacks fill in where they can', () => {
+  const p = product('absurd');
+  // fat −1, sugars 250, protein "abc" and fiber 100.5 are dropped; 5000 kcal falls back to
+  // 1000 kJ; salt 101 g falls back to sodium 0.4 g × 2.5.
+  assert.deepEqual(p.nutrients, { energyKcal: 239, saturatedFat: 2, salt: 1 });
+  assert.equal(p.novaGroup, undefined);
+  assert.equal(p.name, 'Snack with data entry errors');
+  assert.equal(p.imageUrl, undefined, 'only https image URLs are kept');
+  // The limits themselves are allowed.
+  assert.deepEqual(withNutriments({ fat_100g: 100, 'energy-kcal_100g': 900 }), { energyKcal: 900, fat: 100 });
+  assert.deepEqual(withNutriments({ fat_100g: 100.01, 'energy-kcal_100g': 900.1 }), {});
+});
+
+test('garbage input gives null', () => {
+  const garbage: unknown[] = [
+    null,
+    undefined,
+    42,
+    'product',
+    [],
+    {},
+    { code: '' },
+    { code: 'n/a' },
+    { code: '0400000000015', status: 0 },
+    { code: '0400000000015', status: 1, product: null },
+    { code: '0400000000015', status: 1, product: 'none' },
+    { code: '0400000000015', status: 0, product: { code: '0400000000015' } },
+    fixture('not-found'),
+  ];
+  for (const raw of garbage) assert.equal(normalize(raw), null, JSON.stringify(raw) ?? String(raw));
+});
+
+test('codes: digits only, numbers accepted, envelope code used when the product has none', () => {
+  assert.equal(normalize({ code: ' 4123-4567-8903 ' })?.code, '0412345678903');
+  assert.equal(normalize({ code: 412345678903 })?.code, '0412345678903');
+  assert.equal(normalize({ code: '0412345678903', status: 1, product: { product_name: 'x' } })?.code, '0412345678903');
+});
+
+test('names and brands: English name first, first brand of the list', () => {
+  assert.equal(normalize({ code: '96385074', product_name: 'Jambon', product_name_en: 'Ham' })?.name, 'Ham');
+  assert.equal(normalize({ code: '96385074', product_name: 'Jambon', product_name_en: '  ' })?.name, 'Jambon');
+  assert.equal(normalize({ code: '96385074', brands: ',  Acme , Other' })?.brand, 'Acme');
+  assert.equal(normalize({ code: '96385074', brands: ['', 'Acme'] })?.brand, 'Acme');
+  assert.equal(normalize({ code: '96385074' })?.brand, undefined);
+});
+
+test('offNumber accepts plain numbers only', () => {
+  assert.equal(offNumber(2.6), 2.6);
+  assert.equal(offNumber(' 2,6 '), 2.6);
+  assert.equal(offNumber('1e2'), 100);
+  assert.equal(offNumber('.5'), 0.5);
+  for (const v of ['', ' ', '0x10', '<0.5', '1,234.5', 'abc', NaN, Infinity, true, null, undefined]) {
+    assert.equal(offNumber(v), undefined, String(v));
+  }
+});
+
+test('categoryLabel: the most specific English tag, readable', () => {
+  assert.equal(categoryLabel(['en:meats', 'en:prepared-meats', 'en:hams', 'fr:jambons-fumes']), 'Hams');
+  assert.equal(categoryLabel(['en:beverages', 'en:carbonated-drinks']), 'Carbonated drinks');
+  assert.equal(categoryLabel(['en:plant-based-foods', 'en:frozen--vegetables']), 'Frozen vegetables');
+  assert.equal(categoryLabel(['fr:jambons', 'de:schinken']), undefined);
+  assert.equal(categoryLabel(['en:']), undefined);
+  assert.equal(categoryLabel([]), undefined);
+});

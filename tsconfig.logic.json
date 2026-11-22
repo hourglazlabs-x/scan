@@ -1,5 +1,5 @@
 {
-  "//": "Strict check for the code that runs without React Native: domain types, the rubric engine, the Open Food Facts layer, tests and scripts. The app's own tsconfig.json covers everything else.",
+  "//": "Strict check for the code that runs without React Native: domain types, the rubric engine, the Open Food Facts layer, the pure parts of the data layer, tests and scripts. The app's own tsconfig.json covers everything else (src/data/provider.tsx and src/data/hooks.ts need React and Expo).",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -16,5 +16,17 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/domain", "src/rubric", "src/off", "test", "scripts"]
+  "include": [
+    "src/domain",
+    "src/rubric",
+    "src/off",
+    "src/data/contracts.ts",
+    "src/data/lookup.ts",
+    "src/data/db.ts",
+    "src/data/repository.ts",
+    "src/data/history.ts",
+    "src/data/session.ts",
+    "test",
+    "scripts"
+  ]
 }

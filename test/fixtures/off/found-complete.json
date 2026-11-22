@@ -1,0 +1,40 @@
+{
+  "_note": "Synthetic, in Open Food Facts API v2 shape; replace with a real response once the network is open.",
+  "code": "0412345678903",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "code": "0412345678903",
+    "product_name": "Jambon fumé en tranches",
+    "product_name_en": "Smoked ham, sliced",
+    "brands": "Example Smokehouse, Example Foods",
+    "quantity": "9 oz (255 g)",
+    "nutriments": {
+      "energy-kcal_100g": 110,
+      "energy-kj_100g": 460,
+      "energy_100g": 460,
+      "fat_100g": 4,
+      "saturated-fat_100g": 2.1,
+      "sugars_100g": 1,
+      "salt_100g": 2.6,
+      "sodium_100g": 1.04,
+      "proteins_100g": 17,
+      "fiber_100g": 0
+    },
+    "ingredients_text": "Porc, eau, sel, dextrose, phosphate de sodium, ascorbate de sodium, nitrite de sodium.",
+    "ingredients_text_en": "Pork, water, salt, dextrose, sodium phosphate, sodium ascorbate, sodium nitrite.",
+    "additives_tags": ["en:e250", "en:e301", "en:e451"],
+    "additives_n": 3,
+    "nova_group": 4,
+    "categories_tags": [
+      "en:meats-and-their-products",
+      "en:meats",
+      "en:prepared-meats",
+      "en:hams",
+      "fr:jambons-fumes-en-tranches"
+    ],
+    "image_front_url": "https://images.openfoodfacts.org/images/products/041/234/567/8903/front_en.4.400.jpg",
+    "image_url": "https://images.openfoodfacts.org/images/products/041/234/567/8903/front_en.4.400.jpg",
+    "last_modified_t": 1763251200
+  }
+}

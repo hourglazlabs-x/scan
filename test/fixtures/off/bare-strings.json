@@ -1,0 +1,28 @@
+{
+  "_note": "Synthetic, in Open Food Facts API v2 shape; replace with a real response once the network is open.",
+  "code": "400000000046",
+  "product_name": "Rolled oats",
+  "brands": " Example Mills ,Example",
+  "quantity": "18 oz (510 g)",
+  "nutriments": {
+    "energy-kj_100g": "1569",
+    "fat_100g": "6.5",
+    "saturated-fat_100g": "1,2",
+    "sugars_100g": " 1 ",
+    "sodium_100g": "0.004",
+    "proteins_100g": "13",
+    "fiber_100g": "10"
+  },
+  "ingredients_text": "Whole grain rolled oats.",
+  "additives_n": "0",
+  "nova_group": "1",
+  "categories_tags": [
+    "en:plant-based-foods-and-beverages",
+    "en:cereals-and-potatoes",
+    "en:breakfast-cereals",
+    "en:rolled-oats"
+  ],
+  "countries_tags": ["en:united-states"],
+  "unique_scans_n": 42,
+  "last_modified_t": "1763251200"
+}

@@ -1,0 +1,6 @@
+{
+  "_note": "Synthetic, in Open Food Facts API v2 shape; replace with a real response once the network is open.",
+  "code": "0400000000015",
+  "status": 0,
+  "status_verbose": "product not found"
+}

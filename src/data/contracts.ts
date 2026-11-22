@@ -50,10 +50,13 @@ export interface CacheStats {
  * Hooks implemented in src/data/hooks.ts. All of them need the app to be
  * wrapped in <DataProvider> (src/data/provider.tsx).
  *
- * useProductLookup(code: string | null): LookupState | null
+ * useProductLookup(code: string | null, options?: { record?: boolean }): LookupState | null
  *   Cache first, then Open Food Facts. Scores with the bundled rubric.
- *   Records one history entry per scan once the product is found.
  *   Returns null when code is null.
+ *   Only a scan from the camera records history: with { record: true } (the
+ *   Scan screen), a found product is recorded once per code per mount.
+ *   Without it (the default) the product is only shown, so opening it from
+ *   the Index or viewing its breakdown never counts as a scan.
  *
  * useScanHistory(filter: HistoryFilter, query: string): HistoryState
  *   Newest first. `query` matches name, brand or barcode, case-insensitive.
