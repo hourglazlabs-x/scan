@@ -56,7 +56,7 @@ test('non-digits are stripped first; other lengths are null', () => {
 });
 
 test('keys are stable: the key of a key is itself', () => {
-  const inputs: Array<[string, string?]> = [
+  const inputs: [string, string?][] = [
     ['412345678903'],
     ['4006381333931'],
     ['96385074'],

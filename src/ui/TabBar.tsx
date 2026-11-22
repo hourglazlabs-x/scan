@@ -2,7 +2,9 @@
 // from each side, resting on the bottom safe-area inset. The active tab is
 // an ink tile with a white icon.
 
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+// expo-router's own tab navigator passes these props (emitter and
+// navigateToTab instead of a navigation object).
+import type { BottomTabBarProps } from 'expo-router/tabs';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,7 +33,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   you: { label: 'You', icon: 'person' },
 };
 
-export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function TabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { bottom: bottomGap(insets.bottom) }]} accessibilityRole="tablist">
@@ -42,11 +44,11 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         const label = typeof options?.title === 'string' ? options.title : (meta?.label ?? route.name);
 
         const onPress = () => {
-          const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-          if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+          const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          if (!focused && !event.defaultPrevented) navigateToTab(route.key);
         };
         const onLongPress = () => {
-          navigation.emit({ type: 'tabLongPress', target: route.key });
+          emitter.emit({ type: 'tabLongPress', target: route.key });
         };
 
         return (

@@ -36,7 +36,7 @@ const CODE = '0412345678903';
 /** A lookup whose answers the test releases by hand. */
 function controlledLookup() {
   const calls: string[] = [];
-  const pending: Array<(result: LookupResult) => void> = [];
+  const pending: ((result: LookupResult) => void)[] = [];
   const lookup = (code: string) => {
     calls.push(code);
     return new Promise<LookupResult>((resolve) => pending.push(resolve));

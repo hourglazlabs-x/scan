@@ -39,30 +39,33 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
  * down to 0. Null when there is no wait to show (durationMs undefined).
  */
 export function useCountdown(durationMs: number | undefined): number | null {
-  const [deadline, setDeadline] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  // Each update is tagged with the wait it belongs to, so a new wait never shows an old one's time.
+  const [tick, setTick] = useState<{ duration: number; end: number; now: number } | null>(null);
 
   useEffect(() => {
-    if (durationMs === undefined) {
-      setDeadline(null);
-      return undefined;
-    }
-    const start = Date.now();
-    const end = start + Math.max(0, durationMs);
-    setDeadline(end);
-    setNow(start);
+    if (durationMs === undefined) return undefined;
+    const duration = durationMs;
+    const end = Date.now() + Math.max(0, duration);
+    const update = () => {
+      const now = Date.now();
+      setTick({ duration, end, now });
+      return now;
+    };
+    // State only changes from timers, never directly in the effect body.
+    const first = setTimeout(update, 0);
     const timer = setInterval(() => {
-      const time = Date.now();
-      setNow(time);
-      if (time >= end) clearInterval(timer);
+      if (update() >= end) clearInterval(timer);
     }, 500);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, [durationMs]);
 
   if (durationMs === undefined) return null;
-  // Before the effect has run, show the full wait.
-  if (deadline === null) return Math.ceil(Math.max(0, durationMs) / 1000);
-  return Math.max(0, Math.ceil((deadline - now) / 1000));
+  // Until the first update for this wait, show the full wait.
+  if (tick === null || tick.duration !== durationMs) return Math.ceil(Math.max(0, durationMs) / 1000);
+  return Math.max(0, Math.ceil((tick.end - tick.now) / 1000));
 }
 
 /** A unique id that is safe inside an SVG `url(#…)` reference. */

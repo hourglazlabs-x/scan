@@ -19,7 +19,7 @@ export interface PictogramHint {
 
 // Order matters: yogurt is a cup before "milk" makes it a bottle, and a
 // chocolate bar is a pouch before "milk chocolate" does.
-const RULES: ReadonlyArray<readonly [PictogramKind, RegExp]> = [
+const RULES: readonly (readonly [PictogramKind, RegExp])[] = [
   ['deli', /\b(meats?|hams?|bacons?|sausages?|salamis?|deli|cured|hot-?dogs?|turkey|chicken|poultry|charcuterie|jerky|pepperoni|prosciutto)\b/],
   ['cup', /\b(yogh?urts?|skyr|kefir|puddings?|desserts?|custards?)\b/],
   ['pouch', /\b(snacks?|chips|crisps|nuts?|trail|seeds?|candy|candies|confectionery|confectioneries|sweets|cookies?|biscuits?|crackers?|chocolates?|bars?|popcorn|dried)\b/],

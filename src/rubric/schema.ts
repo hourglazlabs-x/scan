@@ -120,7 +120,7 @@ export function validateRubric(input: unknown): string[] {
   const problems: string[] = [];
   const fail = (path: string, message: string) => problems.push(`${path}: ${message}`);
   const ruleIds = new Set<string>();
-  const usedSources: Array<[string, string]> = [];
+  const usedSources: [string, string][] = [];
 
   const claimId = (path: string, id: unknown) => {
     if (!isStr(id)) return fail(path, 'id must be a non-empty string');

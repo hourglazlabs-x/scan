@@ -14,7 +14,7 @@ import { Screen } from '../src/ui/Screen';
 import { IconTile } from '../src/ui/Tile';
 import { Txt } from '../src/ui/Txt';
 
-const ENTRY_PARTS: ReadonlyArray<{ icon: IconName; title: string; detail: string }> = [
+const ENTRY_PARTS: readonly { icon: IconName; title: string; detail: string }[] = [
   { icon: 'eye', title: 'Summary', detail: 'What it is, in a few sentences, with its sources' },
   { icon: 'grid', title: 'Quick facts', detail: 'Key details at a glance' },
   { icon: 'play', title: 'Videos', detail: 'How it works and how to choose one' },

@@ -63,7 +63,7 @@ test('a history row shows the product, scored with the current rubric', () => {
 });
 
 test('a rubric change re-grades past scans on the next read', () => {
-  const json = structuredClone(rubricJson()) as { additiveRisk: { items: Array<{ risk: string }> } };
+  const json = structuredClone(rubricJson()) as { additiveRisk: { items: { risk: string }[] } };
   for (const item of json.additiveRisk.items) item.risk = 'low';
   const lenient = parseRubric(json);
 

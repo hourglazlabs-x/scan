@@ -60,7 +60,7 @@ const setup = (cache: ProductCache, fetchProduct: LookupDeps['fetchProduct'], ex
 
 /** Every additive rated low risk: the same product scores differently. */
 function lenientRubric() {
-  const json = structuredClone(rubricJson()) as { additiveRisk: { items: Array<{ risk: string }> } };
+  const json = structuredClone(rubricJson()) as { additiveRisk: { items: { risk: string }[] } };
   for (const item of json.additiveRisk.items) item.risk = 'low';
   return parseRubric(json);
 }

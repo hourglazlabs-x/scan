@@ -2,11 +2,12 @@
 // flash button, the targeting reticle, and after a match, a readout chip and
 // a peek card with the score. A Barcode | Object switch sits above the tab bar.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useIsFocused } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+// expo-router bundles its own navigation context, so its useIsFocused is the one
+// that sees this screen; @react-navigation/native's would find no navigator.
+import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,7 +33,7 @@ import { useReduceMotion } from '../../src/ui/uiHooks';
 const REPEAT_WINDOW_MS = 3000;
 
 /** Grocery symbologies only. A constant, so the camera is not reconfigured on every render. */
-const SCANNER_SETTINGS: { barcodeTypes: Array<'ean13' | 'ean8' | 'upc_a' | 'upc_e'> } = {
+const SCANNER_SETTINGS: { barcodeTypes: ('ean13' | 'ean8' | 'upc_a' | 'upc_e')[] } = {
   barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
 };
 
@@ -62,17 +63,18 @@ export default function ScanScreen() {
   // Only mount the camera while this tab is on screen, so it stops under the Result and other tabs.
   const cameraOn = granted && isFocused && !cameraFailed;
 
-  useEffect(() => {
-    if (!isFocused) {
-      // The torch goes off with the camera; come back to a dark torch and a fresh camera attempt.
-      setTorch(false);
-      setCameraFailed(false);
-      return;
-    }
-    // Coming back from the Result with the same pack still in view is not a new scan.
-    const code = currentCode.current;
-    if (code) lastSeen.current.set(code, Date.now());
-  }, [isFocused]);
+  useFocusEffect(
+    useCallback(() => {
+      // Coming back from the Result with the same pack still in view is not a new scan.
+      const code = currentCode.current;
+      if (code) lastSeen.current.set(code, Date.now());
+      return () => {
+        // On leaving: the torch goes off with the camera; come back to a dark torch and a fresh camera attempt.
+        setTorch(false);
+        setCameraFailed(false);
+      };
+    }, []),
+  );
 
   const retryCamera = () => {
     setCameraFailed(false);
@@ -258,7 +260,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.ground,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     paddingHorizontal: space.s4,
     gap: space.s3,
   },

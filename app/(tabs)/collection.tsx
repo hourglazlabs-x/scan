@@ -24,7 +24,7 @@ import { useTabBarSpace } from '../../src/ui/TabBar';
 import { Txt } from '../../src/ui/Txt';
 import { useDebouncedValue } from '../../src/ui/uiHooks';
 
-const FILTERS: ReadonlyArray<{ id: HistoryFilter; label: string }> = [
+const FILTERS: readonly { id: HistoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'food', label: 'Food' },
   { id: 'objects', label: 'Objects' },

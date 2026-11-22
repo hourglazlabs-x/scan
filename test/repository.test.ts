@@ -31,10 +31,10 @@ function asyncDb(raw: DatabaseSync): SqlDatabase {
     async runAsync(source, ...params) {
       return raw.prepare(source).run(...params);
     },
-    async getFirstAsync<T>(source: string, ...params: Array<string | number | null>) {
+    async getFirstAsync<T>(source: string, ...params: (string | number | null)[]) {
       return (raw.prepare(source).get(...params) as T | undefined) ?? null;
     },
-    async getAllAsync<T>(source: string, ...params: Array<string | number | null>) {
+    async getAllAsync<T>(source: string, ...params: (string | number | null)[]) {
       return raw.prepare(source).all(...params) as T[];
     },
     async withTransactionAsync(task) {

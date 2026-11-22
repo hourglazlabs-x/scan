@@ -333,6 +333,6 @@ test('a rubric cannot be approved while any source is unchecked', () => {
   const approved = structuredClone(rubricJson) as Record<string, any>;
   approved.status = 'approved';
   assert.ok(validateRubric(approved).some((p) => p.includes('must be checked')));
-  for (const s of Object.values(approved.sources) as Array<Record<string, unknown>>) s.checked = true;
+  for (const s of Object.values(approved.sources) as Record<string, unknown>[]) s.checked = true;
   assert.deepEqual(validateRubric(approved), []);
 });

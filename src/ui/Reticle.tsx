@@ -2,7 +2,7 @@
 // the middle of each side, and the red scan line (runnerRed is reserved for
 // it). The line drifts gently up and down unless Reduce Motion is on.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { color } from '../theme/tokens';
@@ -23,7 +23,8 @@ const BRACKET = 2.5;
 const SWEEP_MS = 1800;
 
 export function Reticle({ width = 206, height = 122, arm = 22, line = true, animate = false }: ReticleProps) {
-  const sweep = useRef(new Animated.Value(0.5)).current;
+  // One stable Animated.Value for the component's life (state, not a ref, so render never reads a ref).
+  const [sweep] = useState(() => new Animated.Value(0.5));
   const moving = line && animate;
 
   useEffect(() => {

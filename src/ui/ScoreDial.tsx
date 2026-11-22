@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   center: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -26,7 +26,7 @@ const json =
 
 /** Answers with the replies in order (the last one repeats) and records every request. */
 function fakeFetch(...replies: Reply[]) {
-  const calls: Array<{ url: string; headers: Headers }> = [];
+  const calls: { url: string; headers: Headers }[] = [];
   const impl: typeof fetch = async (input, init) => {
     calls.push({ url: String(input), headers: new Headers(init?.headers) });
     const reply = replies[Math.min(calls.length - 1, replies.length - 1)];

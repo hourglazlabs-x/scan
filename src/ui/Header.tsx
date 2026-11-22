@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   center: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
