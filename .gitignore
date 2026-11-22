@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+ios/
+android/
+*.log
+.DS_Store
+# Offline packs are build outputs (ODbL data); publish them separately.
+packs/*.sqlite
+packs/*.sqlite.gz
+.env*

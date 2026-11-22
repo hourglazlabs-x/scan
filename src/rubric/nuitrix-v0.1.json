@@ -1,0 +1,199 @@
+{
+  "id": "nuitrix",
+  "version": "0.1.0",
+  "status": "draft",
+  "note": "DRAFT for founder review. The weights and the additive list are placeholders. Thresholds come from the cited sources, but the citations were written from memory and must be checked against the originals before v1 (each source has checked: false until then).",
+  "grades": [
+    { "id": "optimal", "label": "Optimal", "min": 70 },
+    { "id": "caution", "label": "Caution", "min": 40 },
+    { "id": "poor", "label": "Poor", "min": 0 }
+  ],
+  "pillars": [
+    { "id": "nutrients", "label": "Nutrient profile", "max": 50 },
+    { "id": "additives", "label": "Additives", "max": 30 },
+    { "id": "processing", "label": "Processing", "max": 20 }
+  ],
+  "nutrientLimits": [
+    {
+      "id": "NX-N01",
+      "nutrient": "salt",
+      "label": "Salt",
+      "thresholds": { "food": { "low": 0.3, "high": 1.5 }, "drink": { "low": 0.3, "high": 0.75 } },
+      "points": { "medium": -8, "high": -20 },
+      "sources": ["uk-fop"]
+    },
+    {
+      "id": "NX-N02",
+      "nutrient": "sugars",
+      "label": "Sugars",
+      "thresholds": { "food": { "low": 5, "high": 22.5 }, "drink": { "low": 2.5, "high": 11.25 } },
+      "points": { "medium": -8, "high": -20 },
+      "sources": ["uk-fop"]
+    },
+    {
+      "id": "NX-N03",
+      "nutrient": "saturatedFat",
+      "label": "Saturated fat",
+      "thresholds": { "food": { "low": 1.5, "high": 5 }, "drink": { "low": 0.75, "high": 2.5 } },
+      "points": { "medium": -5, "high": -14 },
+      "sources": ["uk-fop"]
+    },
+    {
+      "id": "NX-N04",
+      "nutrient": "fat",
+      "label": "Fat",
+      "thresholds": { "food": { "low": 3, "high": 17.5 }, "drink": { "low": 1.5, "high": 8.75 } },
+      "points": { "medium": -3, "high": -8 },
+      "sources": ["uk-fop"]
+    }
+  ],
+  "nutrientBonuses": [
+    {
+      "id": "NX-N11",
+      "nutrient": "proteins",
+      "label": "Protein",
+      "basis": "energyShare",
+      "levels": { "source": 0.12, "high": 0.2 },
+      "points": { "source": 3, "high": 6 },
+      "sources": ["eu-claims"]
+    },
+    {
+      "id": "NX-N12",
+      "nutrient": "fiber",
+      "label": "Fiber",
+      "basis": "per100",
+      "levels": { "source": 3, "high": 6 },
+      "points": { "source": 3, "high": 6 },
+      "sources": ["eu-claims"]
+    }
+  ],
+  "additiveRisk": {
+    "points": { "high": -30, "moderate": -10, "low": 0 },
+    "items": [
+      { "code": "e249", "name": "Potassium nitrite", "risk": "high", "sources": ["iarc-94", "efsa-nitrites-2017"] },
+      { "code": "e250", "name": "Sodium nitrite", "risk": "high", "sources": ["iarc-94", "efsa-nitrites-2017"] },
+      { "code": "e251", "name": "Sodium nitrate", "risk": "high", "sources": ["iarc-94", "efsa-nitrates-2017"] },
+      { "code": "e252", "name": "Potassium nitrate", "risk": "high", "sources": ["iarc-94", "efsa-nitrates-2017"] },
+      { "code": "e171", "name": "Titanium dioxide", "risk": "high", "sources": ["efsa-e171-2021"] },
+      { "code": "e320", "name": "Butylated hydroxyanisole (BHA)", "risk": "moderate", "sources": ["iarc-bha", "ntp-roc"] },
+      { "code": "e150d", "name": "Sulfite ammonia caramel", "risk": "moderate", "sources": ["iarc-101"] },
+      { "code": "e951", "name": "Aspartame", "risk": "moderate", "sources": ["iarc-134", "jecfa-2023"] },
+      { "code": "e300", "name": "Ascorbic acid", "risk": "low", "sources": ["efsa-ascorbates-2015"] },
+      { "code": "e301", "name": "Sodium ascorbate", "risk": "low", "sources": ["efsa-ascorbates-2015"] },
+      { "code": "e302", "name": "Calcium ascorbate", "risk": "low", "sources": ["efsa-ascorbates-2015"] }
+    ]
+  },
+  "processing": {
+    "nova": {
+      "id": "NX-P01",
+      "points": { "1": 0, "2": -4, "3": -12, "4": -20 },
+      "sources": ["nova-2019"]
+    },
+    "categoryRules": [
+      {
+        "id": "NX-P02",
+        "label": "Processed meat",
+        "phrase": "processed meat",
+        "categories": [
+          "en:processed-meats",
+          "en:hams",
+          "en:bacons",
+          "en:sausages",
+          "en:salamis",
+          "en:cured-meats",
+          "en:hot-dogs"
+        ],
+        "points": -8,
+        "sources": ["iarc-114"]
+      }
+    ]
+  },
+  "sources": {
+    "uk-fop": {
+      "title": "Guide to creating a front of pack (FoP) nutrition label for pre-packed products sold through retail outlets",
+      "publisher": "Department of Health and Social Care and Food Standards Agency (UK)",
+      "year": 2016,
+      "url": "https://www.gov.uk/government/publications/front-of-pack-nutrition-labelling-guidance",
+      "checked": false
+    },
+    "eu-claims": {
+      "title": "Regulation (EC) No 1924/2006 on nutrition and health claims made on foods, Annex (\"source of\" and \"high\" protein and fibre)",
+      "publisher": "European Parliament and Council",
+      "year": 2006,
+      "url": "https://eur-lex.europa.eu/eli/reg/2006/1924/oj",
+      "checked": false
+    },
+    "iarc-94": {
+      "title": "IARC Monographs Volume 94: Ingested nitrate and nitrite, and cyanobacterial peptide toxins (Group 2A under conditions that result in endogenous nitrosation)",
+      "publisher": "International Agency for Research on Cancer",
+      "year": 2010,
+      "checked": false
+    },
+    "iarc-114": {
+      "title": "IARC Monographs Volume 114: Red meat and processed meat (processed meat Group 1)",
+      "publisher": "International Agency for Research on Cancer",
+      "year": 2018,
+      "checked": false
+    },
+    "efsa-nitrites-2017": {
+      "title": "Re-evaluation of potassium nitrite (E 249) and sodium nitrite (E 250) as food additives. EFSA Journal 15(6):4786",
+      "publisher": "European Food Safety Authority",
+      "year": 2017,
+      "checked": false
+    },
+    "efsa-nitrates-2017": {
+      "title": "Re-evaluation of sodium nitrate (E 251) and potassium nitrate (E 252) as food additives. EFSA Journal 15(6):4787",
+      "publisher": "European Food Safety Authority",
+      "year": 2017,
+      "checked": false
+    },
+    "efsa-e171-2021": {
+      "title": "Safety assessment of titanium dioxide (E171) as a food additive. EFSA Journal 19(5):6585",
+      "publisher": "European Food Safety Authority",
+      "year": 2021,
+      "checked": false
+    },
+    "iarc-bha": {
+      "title": "IARC Monographs Supplement 7: butylated hydroxyanisole (Group 2B)",
+      "publisher": "International Agency for Research on Cancer",
+      "year": 1987,
+      "checked": false
+    },
+    "ntp-roc": {
+      "title": "Report on Carcinogens: butylated hydroxyanisole, reasonably anticipated to be a human carcinogen",
+      "publisher": "US National Toxicology Program",
+      "year": 2021,
+      "checked": false
+    },
+    "iarc-101": {
+      "title": "IARC Monographs Volume 101: 4-methylimidazole (Group 2B), a by-product in some caramel colours",
+      "publisher": "International Agency for Research on Cancer",
+      "year": 2013,
+      "checked": false
+    },
+    "iarc-134": {
+      "title": "IARC Monographs Volume 134: aspartame (Group 2B)",
+      "publisher": "International Agency for Research on Cancer",
+      "year": 2023,
+      "checked": false
+    },
+    "jecfa-2023": {
+      "title": "JECFA 96th meeting: acceptable daily intake for aspartame reaffirmed at 0-40 mg/kg body weight",
+      "publisher": "Joint FAO/WHO Expert Committee on Food Additives",
+      "year": 2023,
+      "checked": false
+    },
+    "efsa-ascorbates-2015": {
+      "title": "Re-evaluation of ascorbic acid (E 300), sodium ascorbate (E 301) and calcium ascorbate (E 302) as food additives. EFSA Journal 13(5):4087",
+      "publisher": "European Food Safety Authority",
+      "year": 2015,
+      "checked": false
+    },
+    "nova-2019": {
+      "title": "Monteiro CA et al. Ultra-processed foods: what they are and how to identify them. Public Health Nutrition 22(5):936-941",
+      "publisher": "Public Health Nutrition",
+      "year": 2019,
+      "checked": false
+    }
+  }
+}

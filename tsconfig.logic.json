@@ -1,0 +1,20 @@
+{
+  "//": "Strict check for the code that runs without React Native: domain types, the rubric engine, the Open Food Facts layer, tests and scripts. The app's own tsconfig.json covers everything else.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/domain", "src/rubric", "src/off", "test", "scripts"]
+}
