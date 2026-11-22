@@ -1,9 +1,9 @@
 // Reads and writes the on-device tables (schema in db.ts). Every query is
-// parameterized. Codes from the screens are stored in their lookup form
-// (offLookupCode), so a 12-digit and a 13-digit scan of one UPC-A share a row.
+// parameterized. Codes are stored as canonicalBarcode keys, so a 12-digit and
+// a 13-digit form of one UPC-A share a row.
 
 import type { Product } from '../domain/types.ts';
-import { offLookupCode } from '../off/barcode.ts';
+import { canonicalBarcode } from '../off/barcode.ts';
 import type { SqlDatabase } from './db.ts';
 import type { HistoryEntry } from './history.ts';
 import type { CachedProduct, ProductCache } from './lookup.ts';
@@ -24,6 +24,13 @@ interface EntryRow {
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** The canonical key, or an error: history never stores a code nothing can look up. */
+function keyFor(code: string): string {
+  const key = canonicalBarcode(code);
+  if (key === null) throw new Error(`Not a valid barcode: "${code}"`);
+  return key;
+}
 
 /** Light shape check: the JSON was written by this app, but may predate a change to Product. */
 function isStoredProduct(value: unknown): value is Product {
@@ -81,7 +88,7 @@ export async function recordScan(db: SqlDatabase, code: string, now: Date): Prom
      ON CONFLICT (code) DO UPDATE SET
        last_scanned_at = excluded.last_scanned_at,
        scan_count = entries.scan_count + 1`,
-    offLookupCode(code),
+    keyFor(code),
     at,
     at,
   );
@@ -114,7 +121,7 @@ export async function countCachedProducts(db: SqlDatabase): Promise<number> {
 export async function queueIngredientPhoto(db: SqlDatabase, code: string, uri: string, now: Date): Promise<void> {
   await db.runAsync(
     'INSERT INTO ingredient_photos (code, uri, created_at) VALUES (?, ?, ?)',
-    offLookupCode(code),
+    keyFor(code),
     uri,
     now.toISOString(),
   );

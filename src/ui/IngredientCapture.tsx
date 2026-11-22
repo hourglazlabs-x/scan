@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { MessagePlate } from './MessagePlate';
 import { Reticle } from './Reticle';
 import { Txt } from './Txt';
+import { useReduceMotion } from './uiHooks';
 
 export interface IngredientCaptureProps {
   visible: boolean;
@@ -28,15 +29,23 @@ export interface IngredientCaptureProps {
 }
 
 export function IngredientCapture({ visible, code, onClose }: IngredientCaptureProps) {
+  // No slide-in under Reduce Motion (or while the setting is still unknown).
+  const reduceMotion = useReduceMotion();
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType={reduceMotion === false ? 'slide' : 'none'}
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
       {/* Modals render outside the root view, so they get their own safe-area provider. */}
       <SafeAreaProvider>{visible ? <CaptureBody code={code} onClose={onClose} /> : null}</SafeAreaProvider>
     </Modal>
   );
 }
 
-type Phase = 'camera' | 'saving' | 'saved' | 'failed';
+/** failed: the photo wasn't taken or saved. cameraFailed: the camera itself didn't start. */
+type Phase = 'camera' | 'saving' | 'saved' | 'failed' | 'cameraFailed';
 
 function CaptureBody({ code, onClose }: { code: string; onClose: () => void }) {
   const insets = useSafeAreaInsets();
@@ -69,9 +78,16 @@ function CaptureBody({ code, onClose }: { code: string; onClose: () => void }) {
 
   const safePadding = { paddingTop: insets.top + space.s1, paddingBottom: insets.bottom + space.s4 };
 
-  if (phase === 'saved' || phase === 'failed' || !permission?.granted) {
+  if (phase === 'saved' || phase === 'failed' || phase === 'cameraFailed' || !permission?.granted) {
     let body: ReactNode;
-    if (phase === 'saved') {
+    if (phase === 'cameraFailed') {
+      body = (
+        <MessagePlate icon="camera" title="The camera didn’t start" body="Try again. If it keeps failing, close and reopen the app.">
+          <Button label="Try again" icon="sync" onPress={retry} />
+          <Button label="Close" variant="secondary" onPress={onClose} />
+        </MessagePlate>
+      );
+    } else if (phase === 'saved') {
       body = (
         <MessagePlate
           icon="tick"
@@ -111,7 +127,13 @@ function CaptureBody({ code, onClose }: { code: string; onClose: () => void }) {
   return (
     <View style={styles.cameraRoot}>
       <StatusBar style="light" />
-      <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="back" onCameraReady={() => setReady(true)} />
+      <CameraView
+        ref={camera}
+        style={StyleSheet.absoluteFill}
+        facing="back"
+        onCameraReady={() => setReady(true)}
+        onMountError={() => setPhase('cameraFailed')}
+      />
       <View style={[StyleSheet.absoluteFill, safePadding]} pointerEvents="box-none">
         <View style={styles.topBar}>
           <IconButton icon="cross" label="Close" onPress={onClose} variant="plate" />

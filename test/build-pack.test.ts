@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { gzipSync } from 'node:zlib';
 
 import { buildPack } from '../scripts/build-pack.ts';
-import { isValidBarcode } from '../src/off/barcode.ts';
+import { canonicalBarcode } from '../src/off/barcode.ts';
 import { scoreProduct } from '../src/rubric/engine.ts';
 import { loadRubric } from './helpers.ts';
 import type { Product } from '../src/domain/types.ts';
@@ -33,7 +33,7 @@ const NUTRIMENTS = {
 /** A synthetic EAN-13 in the restricted-circulation 200 range, with a valid check digit. */
 function ean(n: number): string {
   const body = `2000000${String(n).padStart(5, '0')}`;
-  for (let d = 0; d <= 9; d++) if (isValidBarcode(`${body}${d}`)) return `${body}${d}`;
+  for (let d = 0; d <= 9; d++) if (canonicalBarcode(`${body}${d}`) === `${body}${d}`) return `${body}${d}`;
   throw new Error('unreachable');
 }
 
@@ -150,6 +150,16 @@ test('two records with the same lookup code: the more-scanned one is kept', asyn
   const { rows, meta } = readPack(out);
   assert.equal((JSON.parse(String(rows[0]?.json)) as Product).name, 'More scanned');
   assert.equal(meta.product_count, '2');
+});
+
+test('an 8-digit UPC-E in the export is keyed like a camera scan of it', async () => {
+  const input = writeExport('upce.jsonl.gz', [record('04252614', 3), record('96385074', 2)]);
+  const out = join(dir, 'upce.sqlite');
+  await buildPack({ input, out, limit: 10, builtAt: BUILT_AT });
+  assert.deepEqual(
+    readPack(out).rows.map((r) => r.code),
+    [canonicalBarcode('04252614', 'upc_e'), '96385074'],
+  );
 });
 
 test('a plain .jsonl file works too, and a rebuild replaces the old pack', async () => {

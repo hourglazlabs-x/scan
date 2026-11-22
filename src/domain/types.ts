@@ -68,8 +68,15 @@ export interface RuleHit {
   label: string;
   /** Why it scored this way, for example "High: above 1.5 g". */
   detail: string;
-  /** Points added (positive) or removed (negative). Zero is allowed. */
+  /** Points the rule is worth: added (positive) or removed (negative). Zero is allowed. */
   points: number;
+  /**
+   * Points this rule actually changed after its pillar was clamped to 0..max.
+   * Equal to `points` unless the pillar was capped: a bonus on a pillar already
+   * at its maximum, or a penalty on a pillar already at 0, counts for less or
+   * nothing. The summary and "Why it scored" use this, never `points`.
+   */
+  counted: number;
   /** Lowercase phrase used in the summary sentence, for example "high salt". */
   phrase: string;
   /** Ids of entries in the rubric's `sources`. */
@@ -98,7 +105,7 @@ export interface ScoreResult {
   grade: GradeId;
   gradeLabel: string;
   pillars: PillarResult[];
-  /** Every rule evaluated, most negative first. */
+  /** Every rule evaluated: by `counted` (most negative first), then `points`, then rule id. */
   hits: RuleHit[];
   /** Additive codes found in the product that the rubric does not rate. */
   unrated: string[];

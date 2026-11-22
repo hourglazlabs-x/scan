@@ -1,5 +1,7 @@
 // Tests for the Open Food Facts normalizer. The fixtures in test/fixtures/off
 // are synthetic records in the OFF API v2 shape. Run with: npm test
+// Scores are checked only where normalization decides them (known or unknown
+// inputs); the engine's own numbers are covered by rubric.test.ts.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +15,7 @@ const rubric = loadRubric();
 const normalize = (raw: unknown) => normalizeOffProduct(raw, FETCHED_AT);
 const withNutriments = (nutriments: Record<string, unknown>) =>
   normalize({ code: '0400000000046', nutriments })?.nutrients;
+const additivesOf = (fields: Record<string, unknown>) => normalize({ code: '0400000000046', ...fields })?.additives;
 
 function product(name: string): Product {
   const p = normalize(fixture(name));
@@ -36,10 +39,7 @@ test('a complete product maps every field', () => {
     source: { name: 'Open Food Facts', fetchedAt: FETCHED_AT, lastModified: 1763251200 },
   };
   assert.deepEqual(product('found-complete'), expected);
-  // Same numbers as the hand-built ham in rubric.test.ts, so the same score.
-  const r = scoreProduct(product('found-complete'), rubric);
-  assert.equal(r.score, 28);
-  assert.equal(r.grade, 'poor');
+  assert.deepEqual(scoreProduct(product('found-complete'), rubric).missing, [], 'every input is known');
 });
 
 test('the full API response and the bare product (bulk export shape) give the same Product', () => {
@@ -54,40 +54,48 @@ test('a normalized product survives a JSON round trip unchanged (no undefined ke
   }
 });
 
-test('missing ingredients: additives are unknown (undefined), not "none"', () => {
+test('empty ingredients with additives_n 0: additives are unknown, and the product is Incomplete', () => {
+  // The fixture has ingredients_text "", ingredients_text_en "   ", additives_n 0 and additives_tags ["en:e330"].
   const p = product('missing-ingredients');
-  // The fixture has additives_tags ["en:e330"] but blank ingredient texts and no additives_n.
   assert.equal(p.additives, undefined);
   assert.equal('additives' in p, false);
   assert.equal(p.ingredientsText, undefined);
-  assert.equal(p.novaGroup, undefined);
   const r = scoreProduct(p, rubric);
-  assert.equal(r.grade, 'incomplete');
-  assert.deepEqual(r.missing, ['ingredients', 'processing']);
+  assert.equal(r.score, null);
+  assert.ok(r.missing.includes('ingredients'));
+  assert.equal(r.pillars.find((x) => x.id === 'additives')?.value, null, 'no full additives pillar without ingredients');
 });
 
-test('additives_n 0 with no tags: analysed, and none found (additives [])', () => {
+test('additives_n alone never makes additives known', () => {
+  assert.equal(additivesOf({ additives_n: 0 }), undefined);
+  assert.equal(additivesOf({ additives_n: 2, additives_tags: ['en:e330', 'en:e250'] }), undefined);
+  assert.equal(additivesOf({ ingredients_text: '', additives_n: 0 }), undefined);
+});
+
+test('ingredient text or ingredients_n > 0 makes additives known, with or without tags', () => {
+  assert.deepEqual(additivesOf({ ingredients_text: 'Peanuts, raisins, salt.' }), []);
+  assert.deepEqual(additivesOf({ ingredients_text_en: 'Peanuts.', additives_tags: ['en:e330'] }), ['e330']);
+  assert.deepEqual(additivesOf({ ingredients_n: 3 }), []);
+  assert.deepEqual(additivesOf({ ingredients_n: '2', additives_tags: ['en:e330'] }), ['e330']);
+  assert.equal(additivesOf({ ingredients_n: 0, additives_tags: ['en:e330'] }), undefined);
+  assert.equal(additivesOf({ ingredients_n: 'n/a' }), undefined);
+  // Tags are normalized, deduplicated and sorted.
+  assert.deepEqual(
+    additivesOf({ ingredients_text: 'x', additives_tags: ['en:e330', 'en:E250', 'fr:e-330', 7] }),
+    ['e250', 'e330'],
+  );
+});
+
+test('ingredients known and no tags: analysed, and none found (additives [])', () => {
   const p = product('no-additives');
   assert.deepEqual(p.additives, []);
-  assert.equal(p.ingredientsText, undefined);
-  assert.equal(scoreProduct(p, rubric).pillars.find((x) => x.id === 'additives')?.value, 30);
-});
-
-test('a known ingredient list makes additives known, with or without tags', () => {
-  const base = fixture('missing-ingredients') as { product: Record<string, unknown> };
-  const withText = { ...base.product, ingredients_text: 'Peanuts, raisins, salt.' };
-  assert.deepEqual(normalize({ ...withText, additives_tags: undefined })?.additives, []);
-  assert.deepEqual(normalize(withText)?.additives, ['e330']);
-  // Tags are normalized, deduplicated and sorted.
-  assert.deepEqual(normalize({ ...withText, additives_tags: ['en:e330', 'en:E250', 'fr:e-330', 7] })?.additives, ['e250', 'e330']);
-  // A negative or non-numeric additives_n does not count as analysed.
-  assert.equal(normalize({ ...base.product, additives_n: -1 })?.additives, undefined);
-  assert.equal(normalize({ ...base.product, additives_n: 'n/a' })?.additives, undefined);
+  assert.equal(p.ingredientsText, 'Green peas.');
+  assert.ok(!scoreProduct(p, rubric).missing.includes('ingredients'));
 });
 
 test('numbers as strings, in the bare export shape, with salt and energy derived', () => {
   const expected: Product = {
-    // The 12-digit UPC-A in the record is stored in its 13-digit lookup form.
+    // The 12-digit UPC-A in the record is stored as its 13-digit canonical key.
     code: '0400000000046',
     name: 'Rolled oats',
     brand: 'Example Mills',
@@ -101,8 +109,6 @@ test('numbers as strings, in the bare export shape, with salt and energy derived
     source: { name: 'Open Food Facts', fetchedAt: FETCHED_AT, lastModified: 1763251200 },
   };
   assert.deepEqual(product('bare-strings'), expected);
-  // Same numbers as the rolled oats in rubric.test.ts.
-  assert.equal(scoreProduct(product('bare-strings'), rubric).score, 100);
 });
 
 test('salt only as sodium: salt = sodium × 2.5', () => {
@@ -120,22 +126,16 @@ test('energy only in kJ: kcal = kJ ÷ 4.184 (energy-kj_100g first, then energy_1
   assert.equal(withNutriments({ 'energy-kcal_100g': 42, 'energy-kj_100g': 999 })?.energyKcal, 42);
 });
 
-test('floating-point noise is rounded away, so 0.3 g of salt stays "low"', () => {
+test('floating-point noise is rounded away (0.30000000000000004 g → 0.3 g)', () => {
   assert.equal(withNutriments({ salt_100g: 0.30000000000000004 })?.salt, 0.3);
-  const oats = product('bare-strings');
-  const salt = (value: number) =>
-    scoreProduct({ ...oats, nutrients: { ...oats.nutrients, salt: value } }, rubric).hits.find((h) => h.ruleId === 'NX-N01');
-  assert.equal(salt(withNutriments({ salt_100g: 0.30000000000000004 })?.salt ?? NaN)?.points, 0);
+  assert.equal(withNutriments({ sodium_100g: 0.12000000000000001 })?.salt, 0.3);
 });
 
-test('drinks: the en:beverages tag switches to per-100 ml thresholds', () => {
+test('drinks: the en:beverages tag sets the drink basis', () => {
   const cola = product('drink');
   assert.equal(cola.basis, 'drink');
   assert.equal(cola.nutrients.energyKcal, 42.1);
   assert.equal(cola.nutrients.fiber, undefined);
-  const sugar = scoreProduct(cola, rubric).hits.find((h) => h.ruleId === 'NX-N02');
-  assert.equal(sugar?.label, 'Sugars 10.6 g per 100 ml');
-  assert.equal(sugar?.points, -8);
   // The tag must match exactly: "en:plant-based-foods-and-beverages" is food.
   assert.equal(product('no-additives').basis, 'food');
 });
@@ -172,10 +172,19 @@ test('garbage input gives null', () => {
   for (const raw of garbage) assert.equal(normalize(raw), null, JSON.stringify(raw) ?? String(raw));
 });
 
-test('codes: digits only, numbers accepted, envelope code used when the product has none', () => {
+test('codes: canonical keys, numbers accepted, the envelope code used when the product has none', () => {
   assert.equal(normalize({ code: ' 4123-4567-8903 ' })?.code, '0412345678903');
   assert.equal(normalize({ code: 412345678903 })?.code, '0412345678903');
   assert.equal(normalize({ code: '0412345678903', status: 1, product: { product_name: 'x' } })?.code, '0412345678903');
+});
+
+test('8-digit OFF codes: EAN-8 first, then UPC-E, so export rows match camera scans', () => {
+  // Not a valid EAN-8 but a valid UPC-E: keyed like a camera scan of it.
+  assert.equal(normalize({ code: '04252614' })?.code, '0042100005264');
+  // Valid as EAN-8 (and as UPC-E): EAN-8 wins, as for a code typed without a type.
+  assert.equal(normalize({ code: '01234565' })?.code, '01234565');
+  // No canonical form: the digits are kept, and build-pack drops the product.
+  assert.equal(normalize({ code: '123' })?.code, '123');
 });
 
 test('names and brands: English name first, first brand of the list', () => {

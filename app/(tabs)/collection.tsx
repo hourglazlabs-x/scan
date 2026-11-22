@@ -8,10 +8,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HistoryFilter, ScanRecord } from '../../src/data/contracts';
 import { useScanHistory } from '../../src/data/hooks';
+import { RUBRIC } from '../../src/rubric/index';
 import { color, radius, shadow, space } from '../../src/theme/tokens';
 import { font, text } from '../../src/theme/type';
 import { Button } from '../../src/ui/Button';
 import { FilterChip } from '../../src/ui/Chip';
+import { RUBRIC_IS_DRAFT } from '../../src/ui/Draft';
 import { countLabel, formatBarcode, formatInteger } from '../../src/ui/format';
 import { GradeBadge } from '../../src/ui/GradeBadge';
 import { Icon } from '../../src/ui/Icon';
@@ -38,7 +40,7 @@ export default function IndexScreen() {
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [input, setInput] = useState('');
   const query = useDebouncedValue(input.trim(), 200);
-  const { loading, records, counts } = useScanHistory(filter, query);
+  const { loading, records, counts, error } = useScanHistory(filter, query);
 
   const data = useMemo<GridItem[]>(() => (records.length % 2 === 1 ? [...records, null] : records), [records]);
 
@@ -58,6 +60,20 @@ export default function IndexScreen() {
             </Txt>
           </View>
         </View>
+
+        {RUBRIC_IS_DRAFT ? (
+          <Txt variant="label" tone="ink3">
+            {`Scores use draft rubric v${RUBRIC.version}`}
+          </Txt>
+        ) : null}
+        {error && records.length > 0 ? (
+          <View style={styles.errorNote} accessible accessibilityRole="alert">
+            <Icon name="warning" size={12} color={color.amberInk} strokeWidth={2.5} />
+            <Txt variant="label" tone="amberInk" style={styles.errorText}>
+              Couldn’t refresh your Index. Showing what was loaded before.
+            </Txt>
+          </View>
+        ) : null}
 
         <View style={styles.search}>
           <View style={styles.searchIcon} pointerEvents="none">
@@ -108,7 +124,13 @@ export default function IndexScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         ListEmptyComponent={
-          loading ? (
+          error ? (
+            <MessagePlate
+              icon="warning"
+              title="Your Index couldn’t be loaded"
+              body="The scans saved on this phone couldn’t be read. Close and reopen the app to try again."
+            />
+          ) : loading ? (
             <ActivityIndicator color={color.ink3} style={styles.loading} />
           ) : (
             <EmptyState filter={filter} query={query} total={counts.all} />
@@ -212,6 +234,14 @@ const styles = StyleSheet.create({
   },
   totalsMain: {
     ...text.rowTitle,
+  },
+  errorNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  errorText: {
+    flexShrink: 1,
   },
   search: {
     justifyContent: 'center',

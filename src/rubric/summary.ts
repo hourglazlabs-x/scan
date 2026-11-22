@@ -1,5 +1,6 @@
 // Builds the one-sentence explanation shown under the score. It is a fixed
-// template over the rule hits, so it can never disagree with the score.
+// template over the rules' `counted` points (what each rule actually changed
+// after clamping), so it can never credit a rule that changed nothing.
 
 import type { MissingInput, RuleHit } from '../domain/types.ts';
 import { capitalize, joinList } from './format.ts';
@@ -10,40 +11,40 @@ const MISSING_TEXT: Record<MissingInput, string> = {
   processing: 'the processing level',
 };
 
-/**
- * `hits` must already be sorted most negative first (as the engine returns them).
- * Uses at most the two biggest penalties and the biggest bonus.
- */
+/** Uses at most the two biggest counted penalties and the biggest counted bonus. */
 export function summarize(hits: RuleHit[], missing: MissingInput[]): string {
   if (missing.length > 0) {
     const what = joinList(missing.map((m) => MISSING_TEXT[m]));
     return `Not scored: ${what} ${missing.length === 1 ? 'is' : 'are'} missing.`;
   }
 
-  const penalties = hits.filter((h) => h.points < 0);
+  const penalties = hits
+    .filter((h) => h.counted < 0)
+    .sort((a, b) => a.counted - b.counted || a.points - b.points || compareIds(a.ruleId, b.ruleId));
   const bonuses = hits
-    .filter((h) => h.points > 0)
-    .sort((a, b) => b.points - a.points || compareIds(a.ruleId, b.ruleId));
+    .filter((h) => h.counted > 0)
+    .sort((a, b) => b.counted - a.counted || compareIds(a.ruleId, b.ruleId));
 
-  const shownPenalties = penalties.slice(0, 2);
+  const shown = penalties.slice(0, 2);
   const topBonus = bonuses[0];
-  const penaltyText = joinList(shownPenalties.map((h) => h.phrase));
-  const plural = shownPenalties.length > 1;
-
-  if (shownPenalties.length > 0 && topBonus) {
-    const lost = -penalties.reduce((sum, h) => sum + h.points, 0);
-    const gained = bonuses.reduce((sum, h) => sum + h.points, 0);
-    return lost > gained
-      ? `${capitalize(penaltyText)} outweigh${plural ? '' : 's'} the ${topBonus.phrase}.`
-      : `The ${topBonus.phrase} outweighs ${penaltyText}.`;
+  if (shown.length === 0) {
+    // Every pillar starts at its maximum, so with no counted penalty nothing
+    // was lost, and no bonus can have added anything.
+    return 'Nothing lowered the score.';
   }
-  if (shownPenalties.length > 0) {
+
+  const penaltyText = joinList(shown.map((h) => h.phrase));
+  const plural = shown.length > 1;
+  if (!topBonus) {
     return `${capitalize(penaltyText)} ${plural ? 'lower' : 'lowers'} the score.`;
   }
-  if (topBonus) {
-    return `No penalties, and the ${topBonus.phrase} adds points.`;
-  }
-  return 'No rule changed the score.';
+
+  // Bonuses only ever make up for penalties, so what was gained is at most what was lost.
+  const lost = -penalties.reduce((sum, h) => sum + h.counted, 0);
+  const gained = bonuses.reduce((sum, h) => sum + h.counted, 0);
+  return lost > gained
+    ? `${capitalize(penaltyText)} outweigh${plural ? '' : 's'} the ${topBonus.phrase}.`
+    : `The ${topBonus.phrase} offsets ${penaltyText}.`;
 }
 
 /** Locale-independent string order, so results never depend on the device language. */

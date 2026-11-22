@@ -14,11 +14,13 @@ import type { LookupState } from '../data/contracts';
 import { useProductLookup } from '../data/hooks';
 import { color, radius, shadow, space } from '../theme/tokens';
 import { text } from '../theme/type';
-import { LOOKUP_ERROR_COPY, categoryLabelFor, formatBarcode, spokenDigits } from './format';
+import { RUBRIC_IS_DRAFT } from './Draft';
+import { LOOKUP_ERROR_COPY, categoryLabelFor, formatBarcode, rateLimitText, spokenDigits } from './format';
 import { GradeBadge } from './GradeBadge';
 import { Icon } from './Icon';
 import { Pictogram, pictogramFor } from './Pictogram';
 import { Txt } from './Txt';
+import { useCountdown } from './uiHooks';
 
 export interface PeekCardProps {
   code: string;
@@ -29,7 +31,15 @@ export interface PeekCardProps {
 export function PeekCard({ code, type }: PeekCardProps) {
   // Only a camera scan counts as a scan; the Result and Breakdown just read.
   const state = useProductLookup(code, { record: true });
-  const spoken = describe(state, code);
+  const retryAfterMs = state?.status === 'error' && state.reason === 'rate_limited' ? state.retryAfterMs : undefined;
+  const waitSeconds = useCountdown(retryAfterMs);
+  const errorText =
+    state?.status === 'error'
+      ? state.reason === 'rate_limited'
+        ? rateLimitText(waitSeconds)
+        : LOOKUP_ERROR_COPY[state.reason].peek
+      : '';
+  const spoken = describe(state, code, errorText);
 
   // VoiceOver hears the outcome, not only the haptic.
   useEffect(() => {
@@ -47,7 +57,7 @@ export function PeekCard({ code, type }: PeekCardProps) {
       <View style={styles.thumb}>
         <Thumb state={state} />
       </View>
-      <Body state={state} code={code} type={type} />
+      <Body state={state} code={code} type={type} errorText={errorText} />
       <Icon name="chevronRight" size={18} color={color.ink3} />
     </Pressable>
   );
@@ -80,7 +90,15 @@ function Thumb({ state }: { state: LookupState | null }) {
   return <Pictogram kind={kind} size={40} />;
 }
 
-function Body({ state, code, type }: { state: LookupState | null; code: string; type?: string }) {
+interface BodyProps {
+  state: LookupState | null;
+  code: string;
+  type?: string;
+  /** The error line, with a live countdown when Open Food Facts gave a wait time. */
+  errorText: string;
+}
+
+function Body({ state, code, type, errorText }: BodyProps) {
   if (!state || state.status === 'loading') {
     return (
       <View style={styles.text}>
@@ -107,7 +125,7 @@ function Body({ state, code, type }: { state: LookupState | null; code: string; 
     return (
       <View style={styles.text}>
         <Txt variant="rowTitle" numberOfLines={3}>
-          {LOOKUP_ERROR_COPY[state.reason].peek}
+          {errorText}
         </Txt>
       </View>
     );
@@ -129,26 +147,40 @@ function Body({ state, code, type }: { state: LookupState | null; code: string; 
         <Txt variant="numeral" maxFontSizeMultiplier={1.3}>
           {result.score === null ? '—' : String(result.score)}
         </Txt>
+        {RUBRIC_IS_DRAFT ? (
+          <Txt variant="micro" tone="amberInk" maxFontSizeMultiplier={1.4}>
+            Draft
+          </Txt>
+        ) : null}
         <GradeBadge grade={result.grade} label={result.gradeLabel} size="inline" />
       </View>
     </>
   );
 }
 
-/** The card's VoiceOver label, and what to announce once the lookup settles. */
-function describe(state: LookupState | null, code: string): { label: string; announce?: string } {
+/**
+ * The card's VoiceOver label, and what to announce once the lookup settles.
+ * The announcement never includes the live countdown, so it is spoken once,
+ * not on every tick.
+ */
+function describe(state: LookupState | null, code: string, errorText: string): { label: string; announce?: string } {
   if (!state || state.status === 'loading') return { label: `Looking up barcode ${spokenDigits(code)}` };
   if (state.status === 'not_found') {
     const label = 'Not in Open Food Facts yet';
     return { label, announce: label };
   }
   if (state.status === 'error') {
-    const label = LOOKUP_ERROR_COPY[state.reason].peek;
-    return { label, announce: label };
+    const announce =
+      state.reason === 'rate_limited'
+        ? rateLimitText(state.retryAfterMs === undefined ? null : Math.ceil(state.retryAfterMs / 1000))
+        : LOOKUP_ERROR_COPY[state.reason].peek;
+    return { label: errorText, announce };
   }
   const { product, result } = state;
   const name = product.name ?? 'Unnamed product';
-  const score = result.score === null ? `not scored, ${result.gradeLabel}` : `${result.score} of 100, ${result.gradeLabel}`;
+  const draft = RUBRIC_IS_DRAFT ? ', draft rubric' : '';
+  const score =
+    result.score === null ? `not scored, ${result.gradeLabel}` : `${result.score} of 100, ${result.gradeLabel}${draft}`;
   const label = [product.brand, name, score].filter(Boolean).join(', ');
   return { label, announce: `${name}, ${score}` };
 }

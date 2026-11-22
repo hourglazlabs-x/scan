@@ -20,6 +20,7 @@ import { Txt } from '../../src/ui/Txt';
 
 const OFF_URL = 'https://world.openfoodfacts.org';
 const ODBL_URL = 'https://opendatacommons.org/licenses/odbl/1-0/';
+const CC_BY_SA_URL = 'https://creativecommons.org/licenses/by-sa/3.0/';
 
 function openUrl(url: string) {
   Linking.openURL(url).catch(() => undefined);
@@ -41,11 +42,12 @@ export default function YouScreen() {
         <PlateHeader title="Scoring" right={<StatusBadge draft={RUBRIC.status === 'draft'} />} />
         <View style={plateStyles.padded}>
           <Txt variant="value">{`NUÏTRIX rubric v${RUBRIC.version}`}</Txt>
-          {RUBRIC.note ? (
-            <Txt variant="body" tone="ink2">
-              {RUBRIC.note}
-            </Txt>
-          ) : null}
+          {/* RUBRIC.note is for reviewers, so it isn't shown here. */}
+          <Txt variant="body" tone="ink2">
+            {RUBRIC.status === 'draft'
+              ? 'These scores use a draft rulebook that’s still being reviewed. Each rule lists its sources.'
+              : 'Each rule lists its sources.'}
+          </Txt>
         </View>
         {RUBRIC.pillars.map((pillar) => (
           <ListRow
@@ -117,6 +119,20 @@ export default function YouScreen() {
           onPress={() => openUrl(ODBL_URL)}
           accessibilityRole="link"
           accessibilityLabel="Open Database License 1.0"
+          accessibilityHint="Opens the licence"
+          trailing={<Icon name="external" size={14} color={color.ink3} strokeWidth={2.5} />}
+        />
+        <View style={[plateStyles.padded, styles.divided]}>
+          <Txt variant="body" tone="ink2">
+            Product photos from Open Food Facts are under the Creative Commons Attribution-ShareAlike 3.0 licence (CC BY-SA 3.0).
+          </Txt>
+        </View>
+        <ListRow
+          title="CC BY-SA 3.0"
+          detail="creativecommons.org"
+          onPress={() => openUrl(CC_BY_SA_URL)}
+          accessibilityRole="link"
+          accessibilityLabel="Creative Commons Attribution-ShareAlike 3.0"
           accessibilityHint="Opens the licence"
           trailing={<Icon name="external" size={14} color={color.ink3} strokeWidth={2.5} />}
         />
@@ -218,6 +234,11 @@ const styles = StyleSheet.create({
   sourceDetail: {
     gap: 2,
     marginTop: 2,
+  },
+  /** A text block between list rows gets the rows' hairline above it. */
+  divided: {
+    borderTopWidth: 1,
+    borderTopColor: color.hair,
   },
   checkRow: {
     flexDirection: 'row',

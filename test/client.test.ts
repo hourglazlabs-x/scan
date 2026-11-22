@@ -3,9 +3,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fetchOffProduct, parseRetryAfter, type FetchOffProductOptions } from '../src/off/client.ts';
+import {
+  DEFAULT_RATE_LIMIT_WAIT_MS,
+  fetchOffProduct,
+  parseRetryAfter,
+  type FetchOffProductOptions,
+} from '../src/off/client.ts';
 import { USER_AGENT } from '../src/off/config.ts';
 import { OFF_FIELDS } from '../src/off/fields.ts';
+import { createThrottle } from '../src/off/throttle.ts';
 import { FETCHED_AT, fixture } from './helpers.ts';
 
 const CODE = '412345678903';
@@ -81,6 +87,55 @@ test('429 with Retry-After as an HTTP date', async () => {
   const at = new Date(Date.parse(FETCHED_AT) + 60_000).toUTCString();
   const { impl } = fakeFetch(json(429, {}, { 'Retry-After': at }));
   assert.deepEqual(await fetchWith(impl), { status: 'error', reason: 'rate_limited', retryAfterMs: 60_000 });
+});
+
+test('429 without Retry-After waits one full rate-limit window, without a retry', async () => {
+  const { impl, calls } = fakeFetch(json(429, {}));
+  assert.deepEqual(await fetchWith(impl), {
+    status: 'error',
+    reason: 'rate_limited',
+    retryAfterMs: DEFAULT_RATE_LIMIT_WAIT_MS,
+  });
+  assert.equal(calls.length, 1);
+});
+
+test('any Retry-After blocks the shared throttle at once, so other lookups wait too', async () => {
+  let clock = 0;
+  const throttle = createThrottle({ now: () => clock });
+  const { impl } = fakeFetch(json(503, {}, { 'Retry-After': '120' }));
+  assert.deepEqual(await fetchWith(impl, { throttle }), { status: 'error', reason: 'server', retryAfterMs: 120_000 });
+  assert.deepEqual(throttle.tryAcquire(), { allowed: false, retryAfterMs: 120_000 });
+  clock = 120_000;
+  assert.deepEqual(throttle.tryAcquire(), { allowed: true });
+});
+
+test("the retry takes its own throttle slot, and is skipped when there is none", async () => {
+  // The caller (createLookup) took the first request's slot; the budget here is two.
+  const roomy = createThrottle({ limit: 2, now: () => 0 });
+  assert.equal(roomy.tryAcquire().allowed, true);
+  const retried = fakeFetch(json(429, {}, { 'Retry-After': '0' }), json(200, fixture('found-complete')));
+  assert.equal((await fetchWith(retried.impl, { throttle: roomy })).status, 'found');
+  assert.equal(retried.calls.length, 2);
+  assert.equal(roomy.tryAcquire().allowed, false, 'both slots used');
+
+  const full = createThrottle({ limit: 1, now: () => 0 });
+  assert.equal(full.tryAcquire().allowed, true);
+  const skipped = fakeFetch(json(429, {}, { 'Retry-After': '0' }), json(200, fixture('found-complete')));
+  assert.deepEqual(await fetchWith(skipped.impl, { throttle: full }), {
+    status: 'error',
+    reason: 'rate_limited',
+    retryAfterMs: 0,
+  });
+  assert.equal(skipped.calls.length, 1);
+});
+
+test('UPC-E: the canonical key is what OFF is asked for', async () => {
+  const { impl, calls } = fakeFetch(json(404, fixture('not-found')));
+  await fetchOffProduct('0042100005264', { fetchImpl: impl });
+  assert.equal(new URL(calls[0]?.url ?? '').pathname, '/api/v2/product/0042100005264');
+  // The 8 digits alone read as an EAN-8, which this code is not: no request.
+  assert.deepEqual(await fetchOffProduct('04252614', { fetchImpl: impl }), { status: 'error', reason: 'invalid_code' });
+  assert.equal(calls.length, 1);
 });
 
 test('429 with a short Retry-After: one retry, then the second answer stands', async () => {

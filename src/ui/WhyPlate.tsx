@@ -5,21 +5,22 @@ import { StyleSheet } from 'react-native';
 
 import type { RuleHit, ScoreResult } from '../domain/types';
 import { LinkButton } from './Button';
-import { formatPoints, spokenPoints } from './format';
+import { countedNote, formatPoints, spokenPoints } from './format';
 import { ListRow, Plate, PlateHeader } from './Plate';
 import { PointsMarker } from './Tile';
 import { Txt } from './Txt';
 
 /**
- * The `count` non-zero hits with the largest effect, shown in the engine's
- * order (most negative first). So a big bonus can outrank a small penalty,
- * as in the mockup.
+ * The `count` hits that changed the score most, by the points they actually
+ * counted (after their pillar was clamped), shown in the engine's order.
+ * Rules that counted 0 are left out. A big bonus can outrank a small
+ * penalty, as in the mockup.
  */
 export function topHits(hits: readonly RuleHit[], count = 4): RuleHit[] {
   return hits
     .map((hit, index) => ({ hit, index }))
-    .filter(({ hit }) => hit.points !== 0)
-    .sort((a, b) => Math.abs(b.hit.points) - Math.abs(a.hit.points) || a.index - b.index)
+    .filter(({ hit }) => hit.counted !== 0)
+    .sort((a, b) => Math.abs(b.hit.counted) - Math.abs(a.hit.counted) || a.index - b.index)
     .slice(0, count)
     .sort((a, b) => a.index - b.index)
     .map(({ hit }) => hit);
@@ -49,18 +50,23 @@ export function WhyPlate({ result, onShowAll }: WhyPlateProps) {
         }
       />
       {shown.length === 0 ? (
-        <ListRow title="No rule added or removed points" detail="Every rule that applies scored 0." />
+        <ListRow title="No rule changed the score" detail="Every rule that applies counted 0 points." />
       ) : (
-        shown.map((hit) => (
-          <ListRow
-            key={hit.ruleId}
-            leading={<PointsMarker points={hit.points} />}
-            title={hit.label}
-            detail={hit.detail}
-            trailing={<SignedPoints points={hit.points} />}
-            accessibilityLabel={`${hit.label}. ${hit.detail}. ${spokenPoints(hit.points)}.`}
-          />
-        ))
+        shown.map((hit) => {
+          // Only partial counts reach here ("Counted −10 of −14"); rules that counted 0 are filtered out.
+          const note = countedNote(hit, result.pillars.find((p) => p.id === hit.pillar));
+          const detail = note ? `${hit.detail} · ${note}` : hit.detail;
+          return (
+            <ListRow
+              key={hit.ruleId}
+              leading={<PointsMarker points={hit.counted} />}
+              title={hit.label}
+              detail={detail}
+              trailing={<SignedPoints points={hit.counted} />}
+              accessibilityLabel={`${hit.label}. ${detail}. ${spokenPoints(hit.counted)}.`}
+            />
+          );
+        })
       )}
     </Plate>
   );

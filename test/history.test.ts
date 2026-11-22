@@ -1,13 +1,21 @@
 // Tests for history rows: re-scoring on read, the flagged rule, search,
-// filters and counts.
+// filters, counts, and the loading and error states.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { ScanRecord } from '../src/data/contracts.ts';
-import { buildHistoryState, hasHighRiskAdditive, toScanRecord, type HistoryEntry } from '../src/data/history.ts';
+import {
+  buildHistoryState,
+  hasHighRiskAdditive,
+  historyState,
+  LOADING_HISTORY,
+  toScanRecord,
+  type HistoryEntry,
+} from '../src/data/history.ts';
 import type { Product } from '../src/domain/types.ts';
 import { normalizeOffProduct } from '../src/off/normalize.ts';
+import { scoreProduct } from '../src/rubric/engine.ts';
 import { parseRubric } from '../src/rubric/schema.ts';
 import { FETCHED_AT, fixture, loadRubric, rubricJson } from './helpers.ts';
 
@@ -19,6 +27,7 @@ function product(name: string): Product {
   return p;
 }
 
+// The ham carries sodium nitrite (E250), which the rubric rates high risk; the oats carry no additives.
 const ham = product('found-complete');
 const oats = product('bare-strings');
 
@@ -33,8 +42,8 @@ function entry(entryNumber: number, p: Product | null, lastScannedAt = '2026-11-
   };
 }
 
-test('a history row shows the product, re-scored with the current rubric', () => {
-  const record = toScanRecord({ ...entry(3, ham), scanCount: 4 }, rubric);
+test('a history row shows the product, scored with the current rubric', () => {
+  const result = scoreProduct(ham, rubric);
   const expected: ScanRecord = {
     id: 3,
     code: '0412345678903',
@@ -45,35 +54,36 @@ test('a history row shows the product, re-scored with the current rubric', () =>
     brand: 'Example Smokehouse',
     categoryLabel: 'Hams',
     imageUrl: ham.imageUrl,
-    score: 28,
-    grade: 'poor',
-    gradeLabel: 'Poor',
+    score: result.score,
+    grade: result.grade,
+    gradeLabel: result.gradeLabel,
     flagged: true,
   };
-  assert.deepEqual(record, expected);
+  assert.deepEqual(toScanRecord({ ...entry(3, ham), scanCount: 4 }, rubric), expected);
 });
 
 test('a rubric change re-grades past scans on the next read', () => {
-  const lenientJson = structuredClone(rubricJson()) as { additiveRisk: { items: Array<{ code: string; risk: string }> } };
-  for (const item of lenientJson.additiveRisk.items) if (item.code === 'e250') item.risk = 'low';
-  const record = toScanRecord(entry(1, ham), parseRubric(lenientJson));
-  assert.equal(record.score, 58);
-  assert.equal(record.grade, 'caution');
-  assert.equal(record.flagged, false, 'no longer Poor, and no high-risk additive left');
+  const json = structuredClone(rubricJson()) as { additiveRisk: { items: Array<{ risk: string }> } };
+  for (const item of json.additiveRisk.items) item.risk = 'low';
+  const lenient = parseRubric(json);
+
+  const before = toScanRecord(entry(1, ham), rubric);
+  const after = toScanRecord(entry(1, ham), lenient);
+  const expected = scoreProduct(ham, lenient);
+  assert.equal(after.score, expected.score);
+  assert.equal(after.grade, expected.grade);
+  assert.notEqual(after.score, before.score, 'the stored entry did not change, the score did');
+  assert.equal(after.flagged, expected.grade === 'poor', 'with no high-risk additive left, only Poor flags');
 });
 
-test('flagged: Poor, or any high-risk additive, even on an Incomplete product', () => {
-  const { novaGroup: _dropped, ...hamWithoutNova } = ham;
-  const incomplete = toScanRecord(entry(1, hamWithoutNova), rubric);
+test('flagged: any high-risk additive, even on an Incomplete product; checked against the rubric', () => {
+  const incomplete = toScanRecord(entry(1, { ...ham, nutrients: {} }), rubric);
   assert.equal(incomplete.grade, 'incomplete');
   assert.equal(incomplete.flagged, true);
   assert.equal(hasHighRiskAdditive({ ...ham, additives: ['E 250'] }, rubric), true);
   assert.equal(hasHighRiskAdditive({ ...ham, additives: ['en:e301'] }, rubric), false);
   assert.equal(hasHighRiskAdditive({ ...ham, additives: undefined }, rubric), false);
-
-  const optimal = toScanRecord(entry(2, oats), rubric);
-  assert.equal(optimal.grade, 'optimal');
-  assert.equal(optimal.flagged, false);
+  assert.equal(toScanRecord(entry(2, oats), rubric).flagged, false);
 });
 
 test('an entry whose product is gone shows as Incomplete, not flagged', () => {
@@ -108,4 +118,24 @@ test('filters: all, food, objects (none yet) and flagged', () => {
   assert.deepEqual(numbers('food'), [2, 1]);
   assert.deepEqual(numbers('objects'), []);
   assert.deepEqual(numbers('flagged'), [1]);
+});
+
+test('historyState: loading until the first read; a failed read is an error, never an endless spinner', () => {
+  assert.deepEqual(historyState(undefined, false, 'all', ''), LOADING_HISTORY);
+
+  const failedFirst = historyState(undefined, true, 'all', '');
+  assert.equal(failedFirst.loading, false);
+  assert.equal(failedFirst.error, true);
+  assert.deepEqual(failedFirst.records, []);
+  assert.deepEqual(failedFirst.counts, { all: 0, food: 0, objects: 0, flagged: 0 });
+
+  const records = [entry(2, oats), entry(1, ham)].map((e) => toScanRecord(e, rubric));
+  const failedLater = historyState(records, true, 'flagged', '');
+  assert.equal(failedLater.loading, false);
+  assert.equal(failedLater.error, true);
+  assert.deepEqual(failedLater.records.map((r) => r.entryNumber), [1], 'the last good read stays visible');
+
+  const ok = historyState(records, false, 'all', '');
+  assert.equal(ok.loading, false);
+  assert.equal('error' in ok, false);
 });

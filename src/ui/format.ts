@@ -3,6 +3,7 @@
 // so every screen words things the same way.
 
 import type { LookupErrorReason } from '../data/contracts';
+import type { RuleHit } from '../domain/types';
 
 /** The true minus sign (U+2212). Negative points always use it, never a hyphen. */
 export const MINUS = '−';
@@ -12,6 +13,24 @@ export function formatPoints(points: number): string {
   if (points > 0) return `+${points}`;
   if (points < 0) return `${MINUS}${Math.abs(points)}`;
   return '0';
+}
+
+/**
+ * Why a rule counted fewer points than its own value, or null when it
+ * counted in full. Pillars are clamped to 0..max, so a penalty can't take a
+ * pillar below 0 and a bonus can't lift it past its maximum.
+ * "Not counted: Processing was already at 0", "Counted −10 of −14".
+ */
+export function countedNote(
+  hit: Pick<RuleHit, 'points' | 'counted'>,
+  pillar: { label: string; max: number } | undefined,
+): string | null {
+  if (hit.counted === hit.points) return null;
+  if (hit.counted === 0) {
+    if (!pillar) return 'Not counted';
+    return `Not counted: ${pillar.label} was already at ${hit.points < 0 ? 0 : pillar.max}`;
+  }
+  return `Counted ${formatPoints(hit.counted)} of ${formatPoints(hit.points)}`;
 }
 
 /** Signed points for screen readers, for example "minus 30 points". */
@@ -81,6 +100,25 @@ export function categoryLabelFor(categories: readonly string[]): string | undefi
   return words.length > 0 ? words.charAt(0).toUpperCase() + words.slice(1) : undefined;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/** A date that can't be misread as day/month or month/day: "21 Nov 2026", in the phone's time zone. */
+export function formatDate(date: Date): string {
+  return `${date.getDate()} ${MONTHS[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Where a cached product came from and how old it is:
+ * "Saved on this phone · 21 Nov 2026", plus "may be out of date" after 30 days.
+ */
+export function savedCopyText(fetchedAt: string, now = Date.now()): { text: string; stale: boolean } {
+  const time = Date.parse(fetchedAt);
+  if (Number.isNaN(time)) return { text: 'Saved on this phone', stale: false };
+  return { text: `Saved on this phone · ${formatDate(new Date(time))}`, stale: now - time > 30 * DAY_MS };
+}
+
 /** The first value of a route parameter, which expo-router may give as a list. */
 export function paramValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -95,6 +133,16 @@ export interface LookupErrorCopy {
   canRetry: boolean;
 }
 
+/**
+ * Copy for a rate-limited lookup. `seconds` is the wait left (see
+ * useCountdown), or null when Open Food Facts gave no wait time.
+ */
+export function rateLimitText(seconds: number | null): string {
+  if (seconds === null) return 'Too many lookups in a minute. Wait a minute, then try again.';
+  if (seconds > 0) return `Too many lookups in a minute. Try again in ${seconds} s.`;
+  return 'Too many lookups in a minute. You can try again now.';
+}
+
 export const LOOKUP_ERROR_COPY: Record<LookupErrorReason, LookupErrorCopy> = {
   offline: {
     peek: 'No signal, and this product isn’t saved on your phone',
@@ -102,10 +150,11 @@ export const LOOKUP_ERROR_COPY: Record<LookupErrorReason, LookupErrorCopy> = {
     body: 'This product isn’t saved on your phone yet, so it can’t be looked up offline. Try again when you have signal.',
     canRetry: true,
   },
+  // With a retryAfterMs, screens use rateLimitText() with a live countdown instead.
   rate_limited: {
-    peek: 'Open Food Facts is busy. Try again in a minute.',
-    title: 'Open Food Facts is busy',
-    body: 'Too many lookups in a short time. Wait a minute, then try again.',
+    peek: 'Too many lookups in a minute. Wait a minute, then try again.',
+    title: 'Too many lookups',
+    body: 'Too many lookups in a minute. Wait a minute, then try again.',
     canRetry: true,
   },
   server: {

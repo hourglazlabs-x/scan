@@ -6,6 +6,7 @@ import { StyleSheet, View } from 'react-native';
 
 import type { ScoreResult } from '../domain/types';
 import { space } from '../theme/tokens';
+import { DraftTag, RUBRIC_IS_DRAFT } from './Draft';
 import { GradeBadge } from './GradeBadge';
 import { Plate } from './Plate';
 import { ScoreDial } from './ScoreDial';
@@ -22,13 +23,16 @@ export function ScorePlate({ result }: { result: ScoreResult }) {
     <Plate
       contentStyle={styles.content}
       accessible
-      accessibilityLabel={`NUÏTRIX score ${spokenScore}, ${result.gradeLabel}. ${sentence}`}
+      accessibilityLabel={`NUÏTRIX score ${spokenScore}, ${result.gradeLabel}${RUBRIC_IS_DRAFT ? ', draft rubric' : ''}. ${sentence}`}
     >
       <ScoreDial score={result.score} grade={result.grade} />
       <View style={styles.side}>
-        <Txt variant="sectionTitle" tone="ink2">
-          NUÏTRIX score
-        </Txt>
+        <View style={styles.labelRow}>
+          <Txt variant="sectionTitle" tone="ink2">
+            NUÏTRIX score
+          </Txt>
+          <DraftTag />
+        </View>
         <GradeBadge grade={result.grade} label={result.gradeLabel} size="md" />
         <Txt variant="body" tone="ink2">
           {sentence}
@@ -52,5 +56,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'flex-start',
     gap: 10,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
   },
 });

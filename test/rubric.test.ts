@@ -99,7 +99,11 @@ test('oats: bonuses cannot push a pillar past its maximum', () => {
   assert.equal(nutrients?.capped, true);
   assert.equal(r.score, 100);
   assert.equal(r.grade, 'optimal');
-  assert.equal(r.summary, 'The high fiber outweighs moderate fat.');
+  // Only 3 of the 9 bonus points could count (they make up for the −3); the biggest bonus counts first.
+  const counted = (id: string) => r.hits.find((h) => h.ruleId === id)?.counted;
+  assert.equal(counted('NX-N12'), 3);
+  assert.equal(counted('NX-N11'), 0);
+  assert.equal(r.summary, 'The high fiber offsets moderate fat.');
 });
 
 test('missing ingredients and processing level: no score, no guess', () => {
@@ -195,4 +199,140 @@ test('the validator rejects broken rubrics with a readable list of problems', ()
   assert.ok(problems.some((p) => p.includes('unknown source "no-such-source"')), 'unknown source');
   assert.ok(problems.some((p) => p.includes('lower than the grade before it')), 'grade order');
   assert.throws(() => parseRubric(broken), RubricError);
+});
+
+// ---- Clamping: explanations must only credit what actually changed the score ----
+
+const plain = (over: Partial<Product>): Product => ({
+  code: '000000000048',
+  basis: 'food',
+  nutrients: { energyKcal: 300, fat: 2, saturatedFat: 0.5, sugars: 2, salt: 0.1, proteins: 2, fiber: 1 },
+  ingredientsText: 'Test ingredients.',
+  additives: [],
+  novaGroup: 1,
+  categories: [],
+  source,
+  ...over,
+});
+
+test('no penalties: a capped bonus is not credited', () => {
+  // Lentils: nothing lowers the score, so the protein bonus has nothing to make up for.
+  const lentils = plain({ nutrients: { energyKcal: 350, fat: 1.5, saturatedFat: 0.2, sugars: 2, salt: 0.02, proteins: 24, fiber: 11 } });
+  const r = scoreProduct(lentils, rubric);
+  assert.equal(r.score, 100);
+  assert.ok(r.hits.every((h) => h.counted === 0), 'no rule changed the score');
+  assert.equal(r.summary, 'Nothing lowered the score.');
+});
+
+test('a bonus on a full pillar never "outweighs" a penalty elsewhere', () => {
+  // Wholegrain bread: nutrients are full even before the bonus; processing costs 12.
+  const bread = plain({
+    nutrients: { energyKcal: 240, fat: 2.5, saturatedFat: 0.5, sugars: 4, salt: 0.25, proteins: 13, fiber: 7 },
+    novaGroup: 3,
+  });
+  const r = scoreProduct(bread, rubric);
+  assert.equal(r.score, 88);
+  assert.equal(r.hits.find((h) => h.ruleId === 'NX-N11')?.counted, 0);
+  assert.equal(r.summary, 'Processing lowers the score.');
+});
+
+test('a second penalty on an empty pillar counts for nothing and is not named', () => {
+  const salami = plain({
+    nutrients: { energyKcal: 400, fat: 30, saturatedFat: 12, sugars: 1, salt: 4.5, proteins: 25, fiber: 0 },
+    additives: ['en:e250', 'en:e252'],
+    novaGroup: 4,
+    categories: ['en:salamis'],
+  });
+  const r = scoreProduct(salami, rubric);
+  const hit = (id: string) => r.hits.find((h) => h.ruleId === id);
+  assert.equal(hit('NX-A:E250')?.counted, -30);
+  assert.equal(hit('NX-A:E252')?.points, -30);
+  assert.equal(hit('NX-A:E252')?.counted, 0);
+  assert.equal(hit('NX-P01')?.counted, -20);
+  assert.equal(hit('NX-P02')?.counted, 0);
+  // Nutrients 50 − 20 − 14 − 8 + 6 = 14; additives and processing at 0.
+  assert.equal(r.score, 14);
+  assert.equal(r.summary, 'Added sodium nitrite and high salt outweigh the high protein.');
+});
+
+test('an equal bonus and penalty "offset" each other', () => {
+  const r = scoreProduct(plain({ nutrients: { energyKcal: 300, fat: 5, saturatedFat: 1, sugars: 2, salt: 0.1, proteins: 2, fiber: 3.5 } }), rubric);
+  assert.equal(r.score, 100);
+  assert.equal(r.summary, 'The fiber content offsets moderate fat.');
+});
+
+test('counted points always add up to exactly what each pillar changed', () => {
+  const products = [ham, oats, cola, plain({}), plain({ additives: ['e250', 'e171', 'e951'], novaGroup: 4, categories: ['en:hams'] })];
+  for (const p of products) {
+    const r = scoreProduct(p, rubric);
+    for (const pillar of r.pillars) {
+      const counted = r.hits.filter((h) => h.pillar === pillar.id).reduce((s, h) => s + h.counted, 0);
+      assert.equal(counted, (pillar.value ?? pillar.max) - pillar.max, `${p.code} ${pillar.id}`);
+      for (const h of r.hits.filter((x) => x.pillar === pillar.id)) {
+        assert.ok(Math.abs(h.counted) <= Math.abs(h.points) && h.counted * h.points >= 0, `${h.ruleId} counted within points`);
+      }
+    }
+  }
+});
+
+// ---- Thresholds, precision and plausibility ----
+
+test('drinks and foods differ where the thresholds differ', () => {
+  const salt = (basis: 'food' | 'drink') =>
+    scoreProduct(plain({ basis, nutrients: { ...plain({}).nutrients, salt: 0.8 } }), rubric).hits.find((h) => h.ruleId === 'NX-N01');
+  assert.equal(salt('drink')?.points, -20); // above 0.75 g per 100 ml
+  assert.equal(salt('food')?.points, -8); // between 0.3 and 1.5 g per 100 g
+});
+
+test('a shown amount never contradicts its band', () => {
+  const salt = (value: number) =>
+    scoreProduct(plain({ nutrients: { ...plain({}).nutrients, salt: value } }), rubric).hits.find((h) => h.ruleId === 'NX-N01');
+  assert.equal(salt(1.504)?.label, 'Salt 1.5 g per 100 g');
+  assert.equal(salt(1.504)?.points, -8);
+  assert.equal(salt(0.304)?.label, 'Salt 0.3 g per 100 g');
+  assert.equal(salt(0.304)?.points, 0);
+});
+
+test('protein energy-share edges and display', () => {
+  const protein = (grams: number) =>
+    scoreProduct(plain({ nutrients: { ...plain({}).nutrients, energyKcal: 100, proteins: grams } }), rubric).hits.find(
+      (h) => h.ruleId === 'NX-N11',
+    );
+  assert.equal(protein(2.99)?.points, 0);
+  assert.equal(protein(3)?.points, 3); // 12 % of energy
+  assert.equal(protein(4.99)?.points, 3);
+  assert.equal(protein(4.99)?.detail, 'Source of protein: 19% of energy');
+  assert.equal(protein(5)?.points, 6); // 20 % of energy
+});
+
+test('an impossible energy value skips the protein bonus instead of rewarding it', () => {
+  const r = scoreProduct({ ...ham, nutrients: { ...ham.nutrients, energyKcal: 26 } }, rubric);
+  const hit = r.hits.find((h) => h.ruleId === 'NX-N11');
+  assert.equal(hit?.points, 0);
+  assert.match(hit?.detail ?? '', /^Not counted/);
+});
+
+test('additive risk is worded as the rubric rating, not as fact', () => {
+  const hit = scoreProduct(ham, rubric).hits.find((h) => h.ruleId === 'NX-A:E250');
+  assert.equal(hit?.detail, 'Rated high risk');
+});
+
+// ---- Validator ----
+
+test('the validator requires each limit nutrient exactly once and energy shares as fractions', () => {
+  const broken = structuredClone(rubricJson) as Record<string, any>;
+  broken.nutrientLimits[1].nutrient = 'salt'; // two salt rules, no sugar rule
+  broken.nutrientBonuses[0].levels = { source: 12, high: 20 }; // percentages instead of shares
+  const problems = validateRubric(broken);
+  assert.ok(problems.some((p) => p.includes('exactly one rule for salt (found 2)')), 'duplicate salt');
+  assert.ok(problems.some((p) => p.includes('exactly one rule for sugars (found 0)')), 'missing sugars');
+  assert.ok(problems.some((p) => p.includes('not percentages')), 'energy share as percentage');
+});
+
+test('a rubric cannot be approved while any source is unchecked', () => {
+  const approved = structuredClone(rubricJson) as Record<string, any>;
+  approved.status = 'approved';
+  assert.ok(validateRubric(approved).some((p) => p.includes('must be checked')));
+  for (const s of Object.values(approved.sources) as Array<Record<string, unknown>>) s.checked = true;
+  assert.deepEqual(validateRubric(approved), []);
 });

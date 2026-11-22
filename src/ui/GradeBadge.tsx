@@ -3,8 +3,8 @@
 // Sizes, from the mockups:
 // - inline: icon and word only, under a numeral (peek card, breakdown header)
 // - sm: a 26 pt pill with the score, "28 Poor" (Index cards)
-// - md: a 30 pt pill (the Result score plate). An incomplete product shows
-//   amber hazard stripes in place of the icon, the system's warning motif.
+// - md: a 30 pt pill (the Result score plate). An incomplete product adds
+//   amber hazard stripes, the system's warning motif, beside its icon and word.
 
 import Svg, { Line, Rect } from 'react-native-svg';
 import { StyleSheet, View } from 'react-native';
@@ -65,9 +65,10 @@ export function GradeBadge({ grade, label, score, size = 'sm' }: GradeBadgeProps
         <View style={styles.stripes}>
           <HazardStripes />
         </View>
-      ) : (
+      ) : null}
+      <View style={styles.icon}>
         <Icon name={look.icon} size={md ? 14 : 12} color={look.fg} strokeWidth={ICON_STROKE[look.icon]} />
-      )}
+      </View>
       <Txt style={[md ? styles.wordMd : styles.wordSm, fg]} maxFontSizeMultiplier={1.6}>
         {words}
       </Txt>
@@ -120,13 +121,15 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   pillStriped: {
-    gap: 8,
     paddingLeft: 0,
     alignItems: 'stretch',
   },
   stripes: {
     width: 22,
     alignSelf: 'stretch',
+  },
+  icon: {
+    alignSelf: 'center',
   },
   wordSm: {
     ...text.labelStrong,

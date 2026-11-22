@@ -11,13 +11,16 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCacheStats, useOnline } from '../../src/data/hooks';
+import { canonicalBarcode } from '../../src/off/barcode';
 import { color, radius, shadow, space } from '../../src/theme/tokens';
 import { font, text } from '../../src/theme/type';
+import { Button } from '../../src/ui/Button';
 import { CameraPermissionPlate } from '../../src/ui/CameraPermission';
 import { Chip } from '../../src/ui/Chip';
-import { countLabel, formatBarcode, spokenDigits } from '../../src/ui/format';
+import { countLabel, formatBarcode, formatCompact, spokenDigits } from '../../src/ui/format';
 import { IconButton } from '../../src/ui/Header';
 import { Icon } from '../../src/ui/Icon';
+import { MessagePlate } from '../../src/ui/MessagePlate';
 import { PeekCard } from '../../src/ui/PeekCard';
 import { Reticle } from '../../src/ui/Reticle';
 import { StatusLight } from '../../src/ui/StatusLight';
@@ -48,18 +51,22 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [scan, setScan] = useState<ScanHit | null>(null);
+  // A camera that failed to start shows a message instead of a black screen; a new key remounts it.
+  const [cameraFailed, setCameraFailed] = useState(false);
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   const lastSeen = useRef(new Map<string, number>());
   const currentCode = useRef<string | null>(null);
   const nextId = useRef(1);
 
   const granted = permission?.granted === true;
   // Only mount the camera while this tab is on screen, so it stops under the Result and other tabs.
-  const cameraOn = granted && isFocused;
+  const cameraOn = granted && isFocused && !cameraFailed;
 
   useEffect(() => {
     if (!isFocused) {
-      // The torch goes off with the camera; come back to a dark torch.
+      // The torch goes off with the camera; come back to a dark torch and a fresh camera attempt.
       setTorch(false);
+      setCameraFailed(false);
       return;
     }
     // Coming back from the Result with the same pack still in view is not a new scan.
@@ -67,9 +74,15 @@ export default function ScanScreen() {
     if (code) lastSeen.current.set(code, Date.now());
   }, [isFocused]);
 
+  const retryCamera = () => {
+    setCameraFailed(false);
+    setCameraAttempt((n) => n + 1);
+  };
+
   const onBarcodeScanned = useCallback((result: BarcodeScanningResult) => {
-    const code = result.data.trim();
-    if (!code) return;
+    // The one key used everywhere (lookup, history, routes). Null means not a valid product barcode.
+    const code = canonicalBarcode(result.data, result.type);
+    if (code === null) return;
     const now = Date.now();
     const seen = lastSeen.current;
     const previous = seen.get(code);
@@ -89,11 +102,13 @@ export default function ScanScreen() {
     <View style={styles.root}>
       {cameraOn ? (
         <CameraView
+          key={cameraAttempt}
           style={StyleSheet.absoluteFill}
           facing="back"
           barcodeScannerSettings={SCANNER_SETTINGS}
           onBarcodeScanned={onBarcodeScanned}
           enableTorch={torch}
+          onMountError={() => setCameraFailed(true)}
         />
       ) : null}
 
@@ -103,7 +118,7 @@ export default function ScanScreen() {
       >
         <View style={styles.topBar} pointerEvents="box-none">
           <StatusChip />
-          {granted ? (
+          {granted && !cameraFailed ? (
             <IconButton
               icon="flash"
               label="Flash"
@@ -115,7 +130,17 @@ export default function ScanScreen() {
           ) : null}
         </View>
 
-        {granted ? (
+        {granted && cameraFailed ? (
+          <View style={styles.permission}>
+            <MessagePlate
+              icon="camera"
+              title="The camera didn’t start"
+              body="Try again. If it keeps failing, close and reopen the app."
+            >
+              <Button label="Try again" icon="sync" onPress={retryCamera} />
+            </MessagePlate>
+          </View>
+        ) : granted ? (
           <>
             <View style={styles.aim} pointerEvents="box-none">
               <View style={styles.aimAbove} />
@@ -140,34 +165,32 @@ export default function ScanScreen() {
   );
 }
 
-/** "Offline ready" with the saved-product count, or the connection state when nothing is saved yet. */
+/**
+ * The connection and what is saved for offline use:
+ * online with saved products "Offline ready · 412K saved", online with none "Online",
+ * offline "Offline · 412K saved" or just "Offline". New products need signal,
+ * so "Offline ready" is never shown while offline.
+ */
 function StatusChip() {
   const { cachedProducts } = useCacheStats();
   const online = useOnline();
 
-  if (cachedProducts > 0) {
-    const count = countLabel(cachedProducts, 'product', 'products', true);
-    return (
-      <Chip size="lg" elevated accessibilityLabel={`Offline ready, ${count} saved on this phone`}>
-        <StatusLight tone="green" halo />
-        <Txt style={styles.chipTitle} maxFontSizeMultiplier={1.4}>
-          Offline ready
-        </Txt>
-        <Txt variant="label" tone="ink3" maxFontSizeMultiplier={1.4}>
-          {count}
-        </Txt>
-      </Chip>
-    );
-  }
-  // Keeps the flash button on the right while the connection is unknown.
+  // Claim nothing until the connection is known; the empty view keeps the flash button on the right.
   if (online === null) return <View />;
-  const label = online ? 'Online' : 'Offline';
+  const hasSaved = cachedProducts > 0;
+  const title = online ? (hasSaved ? 'Offline ready' : 'Online') : 'Offline';
+  const spoken = hasSaved ? `${title}, ${countLabel(cachedProducts, 'product', 'products', true)} saved on this phone` : title;
   return (
-    <Chip size="lg" elevated accessibilityLabel={label}>
-      <StatusLight tone={online ? 'aqua' : 'silver'} />
+    <Chip size="lg" elevated accessibilityLabel={spoken}>
+      <StatusLight tone={online ? (hasSaved ? 'green' : 'aqua') : 'silver'} halo={online && hasSaved} />
       <Txt style={styles.chipTitle} maxFontSizeMultiplier={1.4}>
-        {label}
+        {title}
       </Txt>
+      {hasSaved ? (
+        <Txt variant="label" tone="ink3" maxFontSizeMultiplier={1.4}>
+          {`· ${formatCompact(cachedProducts)} saved`}
+        </Txt>
+      ) : null}
     </Chip>
   );
 }
@@ -196,13 +219,14 @@ function Hint() {
   );
 }
 
+/** Barcode | Object. The active segment is a selected tab, not something to press. */
 function ModeSwitch() {
   return (
-    <View style={styles.modes}>
+    <View style={styles.modes} accessibilityRole="tablist">
       <View
         style={[styles.mode, styles.modeOn]}
         accessible
-        accessibilityRole="button"
+        accessibilityRole="tab"
         accessibilityLabel="Barcode mode"
         accessibilityState={{ selected: true }}
       >
@@ -213,7 +237,7 @@ function ModeSwitch() {
       </View>
       <Pressable
         onPress={() => router.push('/object')}
-        accessibilityRole="button"
+        accessibilityRole="tab"
         accessibilityLabel="Object mode"
         accessibilityHint="Opens object mode, which comes in the next phase"
         accessibilityState={{ selected: false }}

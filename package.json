@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "start": "expo start",
     "ios": "expo start --ios",
@@ -10,6 +13,7 @@
     "typecheck:logic": "tsc -p tsconfig.logic.json",
     "test": "node --test test/*.test.ts",
     "lint": "expo lint",
-    "build-pack": "node scripts/build-pack.ts"
+    "build-pack": "node scripts/build-pack.ts",
+    "check:release": "node scripts/check-release.ts"
   }
 }

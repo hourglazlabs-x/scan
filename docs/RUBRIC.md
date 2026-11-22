@@ -40,7 +40,23 @@ The thresholds come from the sources listed below. Every citation was written fr
    | The ingredient list, so additives are unknown | Additives |
    | The NOVA processing group | Processing |
 
-The same product and the same rubric always give the same result. The engine is a pure function, with no randomness, no network and no AI. The one-sentence summary is a fixed template built from the biggest rules, so it can't disagree with the score.
+The same product and the same rubric always give the same result. The engine is a pure function, with no randomness, no network and no AI.
+
+### Points that count
+
+Clamping means a rule can be worth more than it changes. A bonus on a pillar already at its maximum adds nothing. So does a second high-risk additive once the additives pillar is at 0. Each rule therefore records two numbers:
+
+- `points`: what the rule is worth
+- `counted`: what it actually changed
+
+For a capped pillar, the order is fixed:
+
+- Over the maximum: the largest bonus counts first, and only as far as it makes up for penalties.
+- Below zero: the largest penalty counts first, until the pillar reaches 0.
+
+Within each pillar, the counted points add up exactly to what the pillar changed. The one-sentence summary and "Why it scored" use counted points only, so they never credit a rule that changed nothing. The breakdown shows both numbers when they differ.
+
+Amounts are compared at the precision they are displayed (two decimals), so a label never reads "1.5 g" while the rule treats the amount as above 1.5 g. Additive ratings are worded as the rubric's rating ("Rated high risk"), not as facts about the additive.
 
 ## Nutrient profile (max 50)
 
@@ -64,7 +80,11 @@ Amounts are per 100 g, or per 100 ml for drinks. A product counts as a drink whe
 | NX-N11 | Protein | ≥ 12 % of energy | ≥ 20 % of energy | +3 / +6 |
 | NX-N12 | Fiber | ≥ 3 g per 100 g | ≥ 6 g per 100 g | +3 / +6 |
 
-The levels match the EU nutrition-claim conditions for "source of" and "high" (source `eu-claims`). Protein's share of energy uses 4 kcal per gram. A missing value skips a bonus; it never blocks the score.
+The levels match the EU nutrition-claim conditions for "source of" and "high" (source `eu-claims`).
+
+- Protein's share of energy uses 4 kcal per gram, and the displayed percentage is rounded down.
+- If protein alone would supply more energy than the product states, the energy value is wrong. The bonus is then not counted.
+- A missing value skips a bonus; it never blocks the score.
 
 ## Additives (max 30)
 
@@ -114,6 +134,19 @@ A sliced ham with 2.6 g salt, 2.1 g saturated fat, 4 g fat and 17 g protein per 
 
 The score is 28, graded **Poor**. Summary: "Added sodium nitrite and high salt outweigh the high protein."
 
+In processing, NOVA 4 counts −20 and the processed-meat rule counts 0, because the pillar is already at 0.
+
+## Known issues with the draft weights
+
+These came from the independent review. They are rubric questions for the founder, not code bugs.
+
+- **Regular versus diet cola.** Regular cola (medium sugar per 100 ml) scores about 62 Caution. Diet cola (aspartame, rated moderate) scores about 60 Caution. The sugared drink ranks higher.
+- **Additives missing from US labels.** US ingredient lists often name additives without E-numbers. Open Food Facts still maps many of them, but "uncured" meats cured with celery powder carry natural nitrite that no E250 tag will catch.
+- **Protein bonus on low-energy foods.** A 5 kcal broth with 0.5 g protein qualifies as "high protein" by share of energy. A minimum amount per 100 g may be wanted.
+- **Repeated additives.** With the current weights, a second high-risk additive changes nothing, and neither does the processed-meat rule on a NOVA 4 product. Both still show in the breakdown with counted 0.
+
+Before testers see scores, score about 20 well-known US products and review them.
+
 ## Sources
 
 None of these citations has been checked against the original yet.
@@ -147,6 +180,10 @@ None of these citations has been checked against the original yet.
 ## Changing the rubric
 
 1. Edit the JSON.
-2. Raise `version`. Scores are stored with the rubric version, and history is re-scored with the current rubric when it's shown.
-3. Run `npm test`. The validator rejects a broken file and lists every problem: unknown sources, duplicate ids, pillars that don't add up to 100, grades out of order.
-4. Set `checked: true` on a source only after reading the original.
+2. Raise `version`. Scores aren't stored: history is re-scored with the current rubric every time it's shown, so past scans change too.
+3. Run `npm test`. The validator rejects a broken file and lists every problem, for example:
+   - unknown sources or duplicate ids
+   - a limit nutrient missing or listed twice
+   - energy-share levels written as percentages
+   - pillars that don't add up to 100, or grades out of order
+4. Set `checked: true` on a source only after reading the original. The validator refuses `"status": "approved"` while any source is unchecked.

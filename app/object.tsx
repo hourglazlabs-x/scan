@@ -40,7 +40,7 @@ export default function ObjectScreen() {
       <MessagePlate
         icon="eye"
         title="Naming an object needs an online image model"
-        body="Point the camera at an object, like a keyboard, and the app will say what it is. That takes an image model that runs online, so it comes in the next phase. Barcode mode works today, on your phone and without signal."
+        body="Point the camera at an object, like a keyboard, and the app will say what it is. That takes an image model that runs online, so it comes in the next phase. Barcode mode works today. Products you’ve scanned before also work without signal."
       />
 
       <Plate>

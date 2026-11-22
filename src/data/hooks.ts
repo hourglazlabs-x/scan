@@ -4,13 +4,13 @@
 // tested under node; this file only connects it to React.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import NetInfo from '@react-native-community/netinfo';
+import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { offLookupCode } from '../off/barcode.ts';
+import { canonicalBarcode } from '../off/barcode.ts';
 import type { CacheStats, HistoryFilter, HistoryState, LookupState, ScanRecord } from './contracts.ts';
 import type { SqlDatabase } from './db.ts';
-import { buildHistoryState, LOADING_HISTORY, toScanRecord } from './history.ts';
+import { historyState, toScanRecord } from './history.ts';
 import { DataContext, type DataContextValue } from './provider.tsx';
 import { countCachedProducts, listEntries, queueIngredientPhoto } from './repository.ts';
 
@@ -22,24 +22,35 @@ function useData(): DataContextValue {
   return value;
 }
 
+interface LiveQuery<T> {
+  /** The last successful result; undefined until the first one. */
+  value?: T;
+  /** The latest run failed. */
+  failed: boolean;
+}
+
 /**
- * Runs `query` now and again after every recorded scan. A result that
- * arrives after a newer run has started is dropped, so a slow read never
- * overwrites a newer one. `query` must be stable (module level or memoized).
+ * Runs `query` now and again after every change (a recorded scan or a cache
+ * write). A result that arrives after a newer run has started is dropped, so
+ * a slow read never overwrites a newer one. `query` must be stable (module
+ * level or memoized).
  */
-function useLiveQuery<T>(query: (db: SqlDatabase) => Promise<T>): T | undefined {
+function useLiveQuery<T>(query: (db: SqlDatabase) => Promise<T>): LiveQuery<T> {
   const { db, changes } = useData();
-  const [value, setValue] = useState<T>();
+  const [state, setState] = useState<LiveQuery<T>>({ failed: false });
   useEffect(() => {
     let latest = 0;
     let active = true;
     const run = () => {
       const id = ++latest;
       query(db).then(
-        (next) => {
-          if (active && id === latest) setValue(() => next);
+        (value) => {
+          if (active && id === latest) setState({ value, failed: false });
         },
-        (error: unknown) => console.warn('[data] query failed', error),
+        (error: unknown) => {
+          console.warn('[data] query failed', error);
+          if (active && id === latest) setState((previous: LiveQuery<T>) => ({ value: previous.value, failed: true }));
+        },
       );
     };
     run();
@@ -49,7 +60,7 @@ function useLiveQuery<T>(query: (db: SqlDatabase) => Promise<T>): T | undefined 
       unsubscribe();
     };
   }, [db, changes, query]);
-  return value;
+  return state;
 }
 
 /**
@@ -92,47 +103,48 @@ export function useScanHistory(filter: HistoryFilter, query: string): HistorySta
     async (db: SqlDatabase): Promise<ScanRecord[]> => (await listEntries(db)).map((entry) => toScanRecord(entry, rubric)),
     [rubric],
   );
-  const records = useLiveQuery(load);
-  return useMemo(
-    () => (records === undefined ? LOADING_HISTORY : buildHistoryState(records, filter, query)),
-    [records, filter, query],
-  );
+  const { value: records, failed } = useLiveQuery<ScanRecord[]>(load);
+  return useMemo(() => historyState(records, failed, filter, query), [records, failed, filter, query]);
 }
 
 export function useCacheStats(): CacheStats {
-  const cachedProducts = useLiveQuery(countCachedProducts) ?? 0;
+  const cachedProducts = useLiveQuery(countCachedProducts).value ?? 0;
   return useMemo(() => ({ cachedProducts }), [cachedProducts]);
 }
 
 /**
- * null until NetInfo first reports.
+ * null until NetInfo first reports. Uses isConnected only: provider.tsx
+ * turns NetInfo's reachability check off (it pings a Google URL), so
+ * isInternetReachable stays null.
  * Assumed API (@react-native-community/netinfo 11): addEventListener returns
  * the unsubscribe function and calls the listener with the current state
- * soon after subscribing; isInternetReachable is null while unknown.
+ * soon after subscribing.
  */
 export function useOnline(): boolean | null {
   const [online, setOnline] = useState<boolean | null>(null);
-  useEffect(() => NetInfo.addEventListener((state) => setOnline(state.isInternetReachable ?? state.isConnected)), []);
+  useEffect(() => NetInfo.addEventListener((state: NetInfoState) => setOnline(state.isConnected)), []);
   return online;
 }
 
-/** Copies the photo into app storage, then queues it. Rejects if the copy or the insert fails. */
+/** Copies the photo into app storage, then queues it. Rejects for an invalid code, or if the copy or insert fails. */
 export function useQueueIngredientPhoto(): (code: string, photoUri: string) => Promise<void> {
   const { db, now } = useData();
   return useCallback(
     async (code: string, photoUri: string) => {
+      const key = canonicalBarcode(code);
+      if (key === null) throw new Error(`Not a valid barcode: "${code}"`);
       const at = now();
-      const storedUri = copyIntoDocuments(photoUri, photoFileName(code, photoUri, at));
-      await queueIngredientPhoto(db, code, storedUri, at);
+      const storedUri = copyIntoDocuments(photoUri, photoFileName(key, photoUri, at));
+      await queueIngredientPhoto(db, key, storedUri, at);
     },
     [db, now],
   );
 }
 
 /** For example "0412345678903-1763740800000.jpg", keeping the camera's extension. */
-function photoFileName(code: string, photoUri: string, at: Date): string {
+function photoFileName(key: string, photoUri: string, at: Date): string {
   const extension = /\.([a-z0-9]{1,5})(?:[?#]|$)/i.exec(photoUri)?.[1]?.toLowerCase() ?? 'jpg';
-  return `${offLookupCode(code)}-${at.getTime()}.${extension}`;
+  return `${key}-${at.getTime()}.${extension}`;
 }
 
 /**

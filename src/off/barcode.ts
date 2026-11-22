@@ -1,5 +1,5 @@
-// Barcode helpers: clean up scanner output, test the check digit, and pick
-// the one form of each code that the app sends to OFF and stores data under.
+// Barcode helpers. canonicalBarcode gives every product one key, used
+// everywhere: the code sent to OFF, the cache, history and the offline pack.
 
 /** Keeps digits only: "4 12345-67890 3" → "412345678903". */
 export function normalizeBarcode(input: string): string {
@@ -45,45 +45,37 @@ export function expandUpcE(code: string): string | null {
   return `${code.charAt(0)}${body}${code.charAt(7)}`;
 }
 
-/**
- * True for an EAN-8, UPC-E, UPC-A or EAN-13 code with a correct check digit.
- * Expects digits only (see normalizeBarcode). An 8-digit code passes as
- * EAN-8 or, when it starts with 0 or 1, as UPC-E.
- */
-export function isValidBarcode(code: string): boolean {
-  if (!/^\d+$/.test(code)) return false;
-  switch (code.length) {
-    case 8: {
-      if (hasValidCheckDigit(code)) return true;
-      const upcA = expandUpcE(code);
-      return upcA !== null && hasValidCheckDigit(upcA);
-    }
-    case 12:
-    case 13:
-      return hasValidCheckDigit(code);
-    default:
-      return false;
-  }
+/** expo-camera's "upc_e", and the legacy iOS symbology name "org.gs1.UPC-E". */
+function isUpcE(type: string | undefined): boolean {
+  return type !== undefined && type.toLowerCase().replace(/[^a-z0-9]/g, '').endsWith('upce');
 }
 
 /**
- * The code sent to OFF, and the key under which products, history and the
- * offline pack store a product.
- *
- * OFF resolves a UPC-A both as 12 digits and as its 13-digit EAN-13 form
- * ("0" + UPC-A). We use the 13-digit form because:
- * - the iPhone camera (AVFoundation, behind expo-camera) reports UPC-A as
- *   EAN-13 with the leading 0, so it is usually what was scanned anyway;
- * - OFF's server pads valid 12-digit codes the same way, so the `code` in
- *   API responses and in the bulk export should match our key (to confirm
- *   against a live response once the network is open);
- * - one key per product stops a typed 12-digit code and a scanned 13-digit
- *   code from becoming two cache rows or two history entries.
- * 8-digit codes (EAN-8 and UPC-E) are sent as scanned, the form scanner
- * apps submit them in. If UPC-E lookups miss in practice, retry with the
- * expanded form (expandUpcE).
+ * The one key for a product, or null when `raw` is not a valid retail
+ * barcode. Non-digits are stripped first; then:
+ * - type 'upc_e': the 8 digits expand to UPC-A, keyed like a UPC-A below.
+ *   (Assumes expo-camera reports UPC-E as all 8 digits; a 12- or 13-digit
+ *   value already expanded by the platform is keyed as UPC-A or EAN-13.)
+ * - UPC-A (12 digits): "0" + the 12 digits, its EAN-13 form. The iPhone
+ *   camera reports UPC-A that way anyway, and OFF's server pads 12-digit
+ *   codes the same way (to confirm against a live response).
+ * - EAN-13: as it is.
+ * - EAN-8: as it is. An 8-digit code with no type is read as EAN-8.
+ * Keys are stable: canonicalBarcode(key) === key.
  */
-export function offLookupCode(code: string): string {
-  const digits = normalizeBarcode(code);
-  return digits.length === 12 && isValidBarcode(digits) ? `0${digits}` : digits;
+export function canonicalBarcode(raw: string, type?: string): string | null {
+  const digits = normalizeBarcode(raw);
+  if (isUpcE(type) && digits.length === 8) {
+    const upcA = expandUpcE(digits);
+    return upcA !== null && hasValidCheckDigit(upcA) ? `0${upcA}` : null;
+  }
+  switch (digits.length) {
+    case 8:
+    case 13:
+      return hasValidCheckDigit(digits) ? digits : null;
+    case 12:
+      return hasValidCheckDigit(digits) ? `0${digits}` : null;
+    default:
+      return null;
+  }
 }

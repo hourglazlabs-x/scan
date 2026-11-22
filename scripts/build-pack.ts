@@ -14,25 +14,25 @@
 //
 // Output:
 //   products(code, json, score, grade): json is the normalized Product, keyed
-//     by its lookup code (offLookupCode). Rows are written most-scanned first,
+//     by its canonical key (canonicalBarcode). Rows are written most-scanned first,
 //     so rowid order is popularity order. score and grade use the rubric at
 //     build time and are for inspection only; the app re-scores from json.
 //   meta(key, value): rubric_id, rubric_version, built_at, source, license,
 //     attribution, country, product_count.
 
-import { createReadStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { createReadStream, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { DatabaseSync } from 'node:sqlite';
-import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createGunzip } from 'node:zlib';
 
 import type { GradeId } from '../src/domain/types.ts';
-import { isValidBarcode } from '../src/off/barcode.ts';
+import { canonicalBarcode } from '../src/off/barcode.ts';
 import { normalizeOffProduct, offNumber } from '../src/off/normalize.ts';
 import { scoreProduct } from '../src/rubric/engine.ts';
 import { parseRubric, type Rubric } from '../src/rubric/schema.ts';
+import { isEntryPoint } from './cli.ts';
 
 export const DEFAULT_LIMIT = 300_000;
 export const DEFAULT_COUNTRY = 'en:united-states';
@@ -62,7 +62,7 @@ export interface BuildPackStats {
   eligible: number;
   /** Rows written to the pack. */
   written: number;
-  /** Kept products dropped because a more-scanned one had the same lookup code. */
+  /** Kept products dropped because a more-scanned one had the same canonical key. */
   duplicates: number;
 }
 
@@ -157,8 +157,8 @@ function readLines(path: string): AsyncIterable<string> {
 function toCandidate(raw: unknown, country: string, rubric: Rubric, fetchedAt: string): Candidate | null {
   if (!isRecord(raw) || !Array.isArray(raw.countries_tags) || !raw.countries_tags.includes(country)) return null;
   const product = normalizeOffProduct(raw, fetchedAt);
-  // A code the scanner can never produce can never be looked up.
-  if (product === null || !isValidBarcode(product.code)) return null;
+  // A code with no canonical key can never be scanned, so it can never be looked up.
+  if (product === null || canonicalBarcode(product.code) === null) return null;
   const result = scoreProduct(product, rubric);
   if (result.missing.includes('nutrition')) return null;
   const scans = offNumber(raw.unique_scans_n);
@@ -275,18 +275,7 @@ async function main(args: string[]): Promise<void> {
   );
 }
 
-/** True when this file is the script node was started with, not a module imported by a test. */
-function isEntryPoint(): boolean {
-  const entry = process.argv[1];
-  if (entry === undefined) return false;
-  try {
-    return import.meta.url === pathToFileURL(realpathSync(entry)).href;
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryPoint()) {
+if (isEntryPoint(import.meta.url)) {
   main(process.argv.slice(2)).catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;

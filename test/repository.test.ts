@@ -138,7 +138,7 @@ test('recordScan: one entry per code, numbered in first-scan order', async () =>
 test('concurrent first scans of different codes still get distinct entry numbers', async () => {
   const { db, raw } = await openMigrated();
   const at = new Date('2026-11-21T09:00:00.000Z');
-  await Promise.all(['412345678903', '4006381333931', '96385074', '04252614'].map((code) => recordScan(db, code, at)));
+  await Promise.all(['412345678903', '4006381333931', '96385074', '3017620422003'].map((code) => recordScan(db, code, at)));
   const numbers = raw.prepare('SELECT entry_number FROM entries ORDER BY entry_number').all().map((r) => r.entry_number);
   assert.deepEqual(numbers, [1, 2, 3, 4]);
 });
@@ -162,7 +162,21 @@ test('listEntries joins the cached product, newest scan first', async () => {
   assert.deepEqual(entries[1]?.product, ham);
 });
 
-test('queueIngredientPhoto stores the photo as queued, under the lookup code', async () => {
+test('a code with no canonical key is refused, and nothing is stored', async () => {
+  const { db, raw } = await openMigrated();
+  const at = new Date(FETCHED_AT);
+  for (const code of ['412345678904', '04252614', '']) {
+    await assert.rejects(recordScan(db, code, at), /Not a valid barcode/);
+    await assert.rejects(queueIngredientPhoto(db, code, 'file:///docs/a.jpg', at), /Not a valid barcode/);
+  }
+  assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM entries').get()?.n, 0);
+  assert.equal(raw.prepare('SELECT COUNT(*) AS n FROM ingredient_photos').get()?.n, 0);
+  // A UPC-E camera scan arrives as its canonical key, which is a valid EAN-13.
+  await recordScan(db, '0042100005264', at);
+  assert.equal(raw.prepare('SELECT code FROM entries').get()?.code, '0042100005264');
+});
+
+test('queueIngredientPhoto stores the photo as queued, under the canonical key', async () => {
   const { db, raw } = await openMigrated();
   await queueIngredientPhoto(db, '412345678903', 'file:///docs/ingredient-photos/a.jpg', new Date(FETCHED_AT));
   const rows = raw.prepare('SELECT code, uri, created_at, status FROM ingredient_photos').all();
@@ -190,6 +204,7 @@ test('end to end: lookup over the SQLite cache goes to the network once, then re
   assert.equal(first.from, 'network');
   assert.equal(second.from, 'cache');
   assert.deepEqual(second.product, first.product);
+  assert.equal(second.fetchedAt, first.fetchedAt, 'the cached copy keeps the time it was fetched');
   assert.deepEqual(second.result, first.result);
   assert.deepEqual(calls, ['0412345678903']);
 });

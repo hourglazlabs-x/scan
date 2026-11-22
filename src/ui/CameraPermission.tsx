@@ -3,6 +3,7 @@
 
 import { Linking } from 'react-native';
 
+import { APP_NAME } from './appName';
 import { Button } from './Button';
 import { MessagePlate } from './MessagePlate';
 
@@ -41,8 +42,8 @@ export function CameraPermissionPlate({ permission, onRequest, purpose = 'scan' 
       title="Camera access is off"
       body={
         purpose === 'scan'
-          ? 'Turn on the camera for MINDMODX Scan in Settings to scan barcodes. Your Index still works without it.'
-          : 'Turn on the camera for MINDMODX Scan in Settings to take the photo.'
+          ? `Turn on the camera for ${APP_NAME} in Settings to scan barcodes. Your Index still works without it.`
+          : `Turn on the camera for ${APP_NAME} in Settings to take the photo.`
       }
     >
       <Button

@@ -4,9 +4,9 @@
 
 Scan a grocery barcode and get a **NUÏTRIX score** with the reasons behind it. Every product you scan joins your **Index**. The app works offline for anything it has already seen.
 
-> **Status: prototype (run 1).** The scoring rules are a draft for founder review ([docs/RUBRIC.md](docs/RUBRIC.md)). Product data comes from Open Food Facts.
+> **Status: prototype (run 1), not yet run on a phone.** The scoring engine, the Open Food Facts layer and storage are tested (see `npm test`). The screens are written but haven't been compiled against the Expo packages yet, because package installs were blocked in the build environment. The next step is `npx expo install` for the dependencies, then a first run on a device ([docs/MISSION_STATE.md](docs/MISSION_STATE.md)). The scoring rules are a draft for founder review ([docs/RUBRIC.md](docs/RUBRIC.md)). Product data comes from Open Food Facts.
 
-## What works
+## What's built
 
 - **Scan.** Live camera barcode reading for UPC-A, EAN-13, EAN-8 and UPC-E, with a haptic on a match and a result card under the reticle.
 - **Result.** Score dial, grade (Optimal, Caution or Poor), a one-sentence summary, and the rules that moved the score most.
@@ -22,7 +22,7 @@ Object mode is next. It needs an online image model, so for now it's a placehold
 **You need:**
 
 - **Expo Go** on your iPhone (free on the App Store)
-- **Node.js 20 or newer** on your Mac ([nodejs.org](https://nodejs.org), the LTS version)
+- **Node.js 22.18 or newer** on your Mac ([nodejs.org](https://nodejs.org), the LTS version). The tests run TypeScript directly, which needs 22.18 or newer.
 - your Mac and iPhone on the same Wi-Fi
 
 **Steps:**
@@ -65,9 +65,9 @@ docs/          architecture, rubric, decisions, mission state
 
 ## Data and license
 
-Product data comes from [Open Food Facts](https://world.openfoodfacts.org) contributors, under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/).
+Product data comes from [Open Food Facts](https://world.openfoodfacts.org) contributors, under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/). Product photos are under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
 
-- The app credits Open Food Facts wherever its data appears.
+- The Result screen credits Open Food Facts for the data and the photo. The You screen states both licenses.
 - Any database derived from Open Food Facts, including offline packs with scores, must be offered under the ODbL with the same credit.
 - The scoring rules and this code are not part of that database.
 

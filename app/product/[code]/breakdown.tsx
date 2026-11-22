@@ -13,7 +13,8 @@ import type { Source } from '../../../src/rubric/schema';
 import { color, radius, space } from '../../../src/theme/tokens';
 import { font, text } from '../../../src/theme/type';
 import { Button } from '../../../src/ui/Button';
-import { LOOKUP_ERROR_COPY, countLabel, paramValue, spokenPoints } from '../../../src/ui/format';
+import { RUBRIC_IS_DRAFT, RUBRIC_LINE } from '../../../src/ui/Draft';
+import { LOOKUP_ERROR_COPY, countLabel, countedNote, formatPoints, paramValue, spokenPoints } from '../../../src/ui/format';
 import { GradeBadge } from '../../../src/ui/GradeBadge';
 import { HeaderBar, useGoBack } from '../../../src/ui/Header';
 import { Icon } from '../../../src/ui/Icon';
@@ -56,9 +57,11 @@ export default function BreakdownScreen() {
   }
 
   const { product, result } = state;
-  const pillarLabel = (id: PillarId) => result.pillars.find((p) => p.id === id)?.label ?? id;
+  const pillarOf = (id: PillarId) => result.pillars.find((p) => p.id === id);
   const toggle = (ruleId: string) => setOpen((prev) => ({ ...prev, [ruleId]: !prev[ruleId] }));
-  const spokenScore = result.score === null ? `Not scored, ${result.gradeLabel}` : `Score ${result.score} of 100, ${result.gradeLabel}`;
+  const draft = RUBRIC_IS_DRAFT ? ', draft rubric' : '';
+  const spokenScore =
+    result.score === null ? `Not scored, ${result.gradeLabel}` : `Score ${result.score} of 100, ${result.gradeLabel}${draft}`;
 
   return (
     <Screen scroll>
@@ -71,6 +74,9 @@ export default function BreakdownScreen() {
           </Txt>
           <Txt style={styles.productName} tone="ink3" numberOfLines={2}>
             {product.name ?? 'Unnamed product'}
+          </Txt>
+          <Txt variant="micro" tone={RUBRIC_IS_DRAFT ? 'amberInk' : 'ink3'}>
+            {RUBRIC_LINE}
           </Txt>
         </View>
         <View style={styles.scoreBlock} accessible accessibilityLabel={spokenScore}>
@@ -97,7 +103,7 @@ export default function BreakdownScreen() {
           title="Rules applied"
           right={
             <Txt variant="label" tone="ink3">
-              {`Rubric v${RUBRIC.version}`}
+              {RUBRIC_LINE}
             </Txt>
           }
         />
@@ -108,7 +114,7 @@ export default function BreakdownScreen() {
             <RuleRow
               key={hit.ruleId}
               hit={hit}
-              pillar={pillarLabel(hit.pillar)}
+              pillar={pillarOf(hit.pillar)}
               expanded={open[hit.ruleId] === true}
               onToggle={() => toggle(hit.ruleId)}
             />
@@ -165,41 +171,59 @@ function PillarRow({ pillar }: { pillar: PillarResult }) {
 
 interface RuleRowProps {
   hit: RuleHit;
-  pillar: string;
+  /** The rule's pillar, for its label and maximum. */
+  pillar: PillarResult | undefined;
   expanded: boolean;
   onToggle: () => void;
 }
 
+/**
+ * One rule. The main number is what the rule counted after its pillar was
+ * clamped; when that differs from the rule's own points, a note says why.
+ */
 function RuleRow({ hit, pillar, expanded, onToggle }: RuleRowProps) {
   const sources = countLabel(hit.sources.length, 'source', 'sources');
+  const pillarLabel = pillar?.label ?? hit.pillar;
+  const note = countedNote(hit, pillar);
   return (
     <ListRow
       title={hit.label}
       compactTitle
       minHeight={52}
       detail={
-        <Txt variant="label" tone="ink3">
-          <Txt style={styles.ruleId} tone="ink3">
-            {hit.ruleId}
+        <>
+          <Txt variant="label" tone="ink3">
+            <Txt style={styles.ruleId} tone="ink3">
+              {hit.ruleId}
+            </Txt>
+            {` · ${pillarLabel} · ${sources}`}
           </Txt>
-          {` · ${pillar} · ${sources}`}
-        </Txt>
+          {note ? (
+            <Txt variant="label" tone="ink2">
+              {note}
+            </Txt>
+          ) : null}
+        </>
       }
       trailing={
         <>
-          <SignedPoints points={hit.points} size="sm" />
+          <SignedPoints points={hit.counted} size="sm" />
           <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={16} color={color.ink3} strokeWidth={2.5} />
         </>
       }
       onPress={onToggle}
-      accessibilityLabel={`${hit.label}, ${spokenPoints(hit.points)}. Rule ${hit.ruleId}, ${pillar}, ${sources}.`}
+      accessibilityLabel={
+        note
+          ? `${hit.label}, ${spokenPoints(hit.counted)} counted. ${note}. Rule ${hit.ruleId}, ${pillarLabel}, ${sources}.`
+          : `${hit.label}, ${spokenPoints(hit.counted)}. Rule ${hit.ruleId}, ${pillarLabel}, ${sources}.`
+      }
       accessibilityHint={expanded ? 'Hides the sources' : 'Shows the sources'}
       accessibilityState={{ expanded }}
     >
       {expanded ? (
         <View style={styles.expanded}>
           <Txt variant="label" tone="ink2">
-            {hit.detail}
+            {hit.counted === hit.points ? hit.detail : `${hit.detail} · Rule value ${formatPoints(hit.points)}`}
           </Txt>
           {hit.sources.map((id) => (
             <SourceLine key={id} id={id} />
@@ -322,8 +346,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  // A minimum, not a fixed width, so "50 / 50" never wraps at large text sizes.
   pillarValue: {
-    width: 56,
+    minWidth: 56,
+    flexShrink: 0,
     alignItems: 'flex-end',
   },
   pillarNumbers: {

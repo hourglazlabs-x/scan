@@ -7,7 +7,7 @@ export const OFF_BASE_URL = 'https://world.openfoodfacts.org';
  * version and a contact email, so they can reach the developer instead of
  * blocking the traffic.
  *
- * FOUNDER: replace CONTACT_EMAIL_PLACEHOLDER with a real contact email before
- * any build reaches testers.
+ * FOUNDER: put a real contact email in the brackets below before any build
+ * reaches testers. `npm run check:release` fails until you do.
  */
 export const USER_AGENT = 'MINDMODXScan/0.1.0 (CONTACT_EMAIL_PLACEHOLDER)';

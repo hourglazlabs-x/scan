@@ -183,6 +183,11 @@ export function validateRubric(input: unknown): string[] {
   if (!Array.isArray(r.nutrientLimits)) {
     fail('nutrientLimits', 'must be a list');
   } else {
+    // Each limit nutrient exactly once: a missing one would let any amount pass unpenalised.
+    for (const nutrient of LIMIT_NUTRIENTS) {
+      const count = r.nutrientLimits.filter((l) => isObj(l) && l.nutrient === nutrient).length;
+      if (count !== 1) fail('nutrientLimits', `needs exactly one rule for ${nutrient} (found ${count})`);
+    }
     r.nutrientLimits.forEach((l, i) => {
       const path = `nutrientLimits[${i}]`;
       if (!isObj(l)) return fail(path, 'must be an object');
@@ -211,15 +216,21 @@ export function validateRubric(input: unknown): string[] {
   if (!Array.isArray(r.nutrientBonuses)) {
     fail('nutrientBonuses', 'must be a list');
   } else {
+    const bonusNutrients = new Set<string>();
     r.nutrientBonuses.forEach((b, i) => {
       const path = `nutrientBonuses[${i}]`;
       if (!isObj(b)) return fail(path, 'must be an object');
       claimId(path, b.id);
       if (!oneOf(b.nutrient, BONUS_NUTRIENTS)) fail(path, `nutrient must be one of ${BONUS_NUTRIENTS.join(', ')}`);
+      else if (bonusNutrients.has(b.nutrient)) fail(path, `duplicate bonus for ${b.nutrient}`);
+      else bonusNutrients.add(b.nutrient);
       if (!isStr(b.label)) fail(path, 'label must be a non-empty string');
       if (!oneOf(b.basis, ['energyShare', 'per100'] as const)) fail(path, 'basis must be "energyShare" or "per100"');
       if (!isObj(b.levels) || !isNum(b.levels.source) || !isNum(b.levels.high)) fail(path, 'levels needs numeric source and high');
       else if (!(b.levels.source > 0 && b.levels.source < b.levels.high)) fail(path, 'levels.source must be above 0 and below levels.high');
+      else if (b.basis === 'energyShare' && b.levels.high > 1) {
+        fail(path, 'energyShare levels are shares of energy from 0 to 1 (0.2 means 20 %), not percentages');
+      }
       if (!isObj(b.points) || !isInt(b.points.source) || !isInt(b.points.high)) fail(path, 'points needs whole-number source and high');
       else if (!(b.points.source >= 0 && b.points.high >= b.points.source)) fail(path, 'points must be 0 or positive, with high at least source');
       checkSources(`${path}.sources`, b.sources);
@@ -308,6 +319,12 @@ export function validateRubric(input: unknown): string[] {
       if (typeof s.checked !== 'boolean') fail(path, 'checked must be true or false');
     }
     for (const [path, id] of usedSources) if (!(id in sources)) fail(path, `unknown source "${id}"`);
+    // An approved rubric may not rest on a citation nobody has read.
+    if (r.status === 'approved') {
+      for (const [id, s] of Object.entries(sources)) {
+        if (isObj(s) && s.checked !== true) fail(`sources.${id}`, 'must be checked (checked: true) before the rubric is approved');
+      }
+    }
   }
 
   return problems;

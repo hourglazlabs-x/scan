@@ -7,14 +7,22 @@ import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking, Share, StyleSheet } from 'react-native';
 
+import type { LookupErrorReason } from '../../../src/data/contracts';
 import { useOnline, useProductLookup } from '../../../src/data/hooks';
 import type { MissingInput, Product, ScoreResult } from '../../../src/domain/types';
 import { joinList } from '../../../src/rubric/format';
-import { RUBRIC } from '../../../src/rubric/index';
 import { text } from '../../../src/theme/type';
 import { Button } from '../../../src/ui/Button';
 import { ConnectionChip } from '../../../src/ui/Chip';
-import { LOOKUP_ERROR_COPY, formatBarcode, paramValue } from '../../../src/ui/format';
+import { RUBRIC_IS_DRAFT, RUBRIC_LINE } from '../../../src/ui/Draft';
+import {
+  LOOKUP_ERROR_COPY,
+  formatBarcode,
+  formatPoints,
+  paramValue,
+  rateLimitText,
+  savedCopyText,
+} from '../../../src/ui/format';
 import { HaveList } from '../../../src/ui/HaveList';
 import { HeaderBar, useGoBack } from '../../../src/ui/Header';
 import { IngredientCapture } from '../../../src/ui/IngredientCapture';
@@ -23,9 +31,9 @@ import { ProductHeader } from '../../../src/ui/ProductHeader';
 import { Screen } from '../../../src/ui/Screen';
 import { ScorePlate } from '../../../src/ui/ScorePlate';
 import { Txt } from '../../../src/ui/Txt';
-import { WhyPlate } from '../../../src/ui/WhyPlate';
+import { useCountdown } from '../../../src/ui/uiHooks';
+import { WhyPlate, topHits } from '../../../src/ui/WhyPlate';
 
-const RUBRIC_LINE = `Rubric v${RUBRIC.version}${RUBRIC.status === 'draft' ? ' (draft)' : ''}`;
 const FOOTER = `${RUBRIC_LINE} · Data from Open Food Facts contributors (ODbL)`;
 
 const MISSING_TEXT: Record<MissingInput, string> = {
@@ -100,18 +108,16 @@ function ResultBody({ code, backLabel, onRetry }: ResultBodyProps) {
   }
 
   if (state.status === 'error') {
-    const copy = LOOKUP_ERROR_COPY[state.reason];
     return (
       <Screen scroll>
         <HeaderBar backLabel={backLabel} onBack={goBack} center={center} />
-        <MessagePlate icon="warning" title={copy.title} body={copy.body}>
-          {copy.canRetry ? <Button label="Try again" icon="sync" onPress={onRetry} /> : null}
-          <Button
-            label={`Back to ${backLabelLower}`}
-            variant={copy.canRetry ? 'secondary' : 'primary'}
-            onPress={goBack}
-          />
-        </MessagePlate>
+        <LookupErrorPlate
+          reason={state.reason}
+          retryAfterMs={state.retryAfterMs}
+          backButtonLabel={`Back to ${backLabelLower}`}
+          onRetry={onRetry}
+          onBack={goBack}
+        />
       </Screen>
     );
   }
@@ -161,6 +167,7 @@ function ResultBody({ code, backLabel, onRetry }: ResultBodyProps) {
           </>
         )}
 
+        {state.from === 'cache' ? <SavedLine fetchedAt={state.fetchedAt} /> : null}
         <Txt style={styles.footer} tone="ink3" align="center">
           {FOOTER}
         </Txt>
@@ -173,17 +180,66 @@ function ResultBody({ code, backLabel, onRetry }: ResultBodyProps) {
   );
 }
 
+interface LookupErrorPlateProps {
+  reason: LookupErrorReason;
+  /** Rate limits only: how long Open Food Facts asked us to wait. */
+  retryAfterMs?: number;
+  backButtonLabel: string;
+  onRetry: () => void;
+  onBack: () => void;
+}
+
+/** A failed lookup. A rate limit with a wait time counts down, and "Try again" stays off until it ends. */
+function LookupErrorPlate({ reason, retryAfterMs, backButtonLabel, onRetry, onBack }: LookupErrorPlateProps) {
+  const copy = LOOKUP_ERROR_COPY[reason];
+  const waitSeconds = useCountdown(reason === 'rate_limited' ? retryAfterMs : undefined);
+  const waiting = waitSeconds !== null && waitSeconds > 0;
+  return (
+    <MessagePlate icon="warning" title={copy.title} body={reason === 'rate_limited' ? rateLimitText(waitSeconds) : copy.body}>
+      {copy.canRetry ? (
+        <Button
+          label={waiting ? `Try again in ${waitSeconds} s` : 'Try again'}
+          icon="sync"
+          disabled={waiting}
+          onPress={onRetry}
+        />
+      ) : null}
+      <Button label={backButtonLabel} variant={copy.canRetry ? 'secondary' : 'primary'} onPress={onBack} />
+    </MessagePlate>
+  );
+}
+
+/** "Saved on this phone · 21 Nov 2026", with "may be out of date" after 30 days. */
+function SavedLine({ fetchedAt }: { fetchedAt: string }) {
+  const { text: line, stale } = savedCopyText(fetchedAt);
+  return (
+    <Txt style={styles.footer} tone="ink3" align="center">
+      {line}
+      {stale ? (
+        <Txt style={styles.footer} tone="amberInk">
+          {' · may be out of date'}
+        </Txt>
+      ) : null}
+    </Txt>
+  );
+}
+
 function shareResult(product: Product, result: ScoreResult) {
   const name = product.name ?? 'Unnamed product';
-  const message = [
+  const draft = RUBRIC_IS_DRAFT ? ' (draft rubric)' : '';
+  const lines = [
     product.brand ? `${name} (${product.brand})` : name,
     result.score === null
       ? `NUÏTRIX score: not scored (${result.gradeLabel})`
-      : `NUÏTRIX score: ${result.score} of 100, ${result.gradeLabel}`,
+      : `NUÏTRIX score: ${result.score} of 100, ${result.gradeLabel}${draft}`,
     result.summary,
-    `${RUBRIC_LINE}. Product data from Open Food Facts contributors (ODbL).`,
-  ].join('\n');
-  Share.share({ message }).catch(() => undefined);
+  ];
+  // The same rules as "Why it scored", with the points they actually counted.
+  if (result.score !== null) {
+    for (const hit of topHits(result.hits)) lines.push(`${hit.label}: ${formatPoints(hit.counted)}`);
+  }
+  lines.push(`${RUBRIC_LINE}. Product data from Open Food Facts contributors (ODbL).`);
+  Share.share({ message: lines.join('\n') }).catch(() => undefined);
 }
 
 const styles = StyleSheet.create({

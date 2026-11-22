@@ -7,7 +7,7 @@
 import type { NovaGroup, Nutrients, Product, ProductSource } from '../domain/types.ts';
 import { normalizeAdditiveCode } from '../rubric/engine.ts';
 import { capitalize } from '../rubric/format.ts';
-import { normalizeBarcode, offLookupCode } from './barcode.ts';
+import { canonicalBarcode, normalizeBarcode } from './barcode.ts';
 import type { OffField } from './fields.ts';
 
 /** The product fields we request (see fields.ts), all untrusted. */
@@ -97,16 +97,18 @@ function readNutrients(value: unknown): Nutrients {
 }
 
 /**
- * Additives are known only once the ingredients are. Without an ingredient
- * list, an empty additives_tags means "not analysed", not "none", so the
- * result is undefined and the product shows as Incomplete.
+ * Additives are known only once the ingredients are: a non-empty ingredient
+ * text, or at least one parsed ingredient (ingredients_n > 0). Without them
+ * an empty additives_tags means "not analysed", not "none", so the result is
+ * undefined and the product shows as Incomplete. additives_n alone is not
+ * trusted: OFF can report 0 for a product whose ingredient list is empty.
  */
 function readAdditives(p: OffProduct): string[] | undefined {
-  const analysed = offNumber(p.additives_n);
+  const parsed = offNumber(p.ingredients_n);
   const known =
     text(p.ingredients_text) !== undefined ||
     text(p.ingredients_text_en) !== undefined ||
-    (analysed !== undefined && analysed >= 0);
+    (parsed !== undefined && parsed > 0);
   if (!known) return undefined;
   const codes = strings(p.additives_tags)
     .map(normalizeAdditiveCode)
@@ -135,6 +137,17 @@ function codeDigits(value: unknown): string {
   return '';
 }
 
+/**
+ * OFF records carry no symbology, so an 8-digit code is read as EAN-8 first
+ * and, only if that check digit fails, as UPC-E. That way a UPC-E product in
+ * the bulk export gets the same key as a camera scan of it. A code that is
+ * neither keeps its digits (createLookup re-keys API results anyway, and
+ * build-pack drops codes that have no canonical form).
+ */
+function productKey(digits: string): string {
+  return canonicalBarcode(digits) ?? canonicalBarcode(digits, 'upc_e') ?? digits;
+}
+
 function httpsUrl(value: unknown): string | undefined {
   const url = text(value);
   return url?.startsWith('https://') ? url : undefined;
@@ -150,7 +163,7 @@ function readSource(p: OffProduct, fetchedAt: string): ProductSource {
  * Accepts a full API v2 response ({ code, status, product }) or a bare product
  * object (one line of the bulk JSONL export). Returns null when there is no
  * usable product: not an object, a "not found" response, or no barcode.
- * The code is stored in its lookup form (see offLookupCode).
+ * The code is stored as its canonical key (see canonicalBarcode).
  */
 export function normalizeOffProduct(raw: unknown, fetchedAt: string): Product | null {
   if (!isRecord(raw)) return null;
@@ -169,7 +182,7 @@ export function normalizeOffProduct(raw: unknown, fetchedAt: string): Product | 
   const p: OffProduct = record;
   const categories = strings(p.categories_tags);
   return compact<Product>({
-    code: offLookupCode(code),
+    code: productKey(code),
     name: text(p.product_name_en) ?? text(p.product_name),
     brand: firstBrand(p.brands),
     quantity: text(p.quantity),

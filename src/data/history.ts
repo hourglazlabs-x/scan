@@ -97,3 +97,18 @@ export function buildHistoryState(records: readonly ScanRecord[], filter: Histor
     counts: { all: count('all'), food: count('food'), objects: count('objects'), flagged: count('flagged') },
   };
 }
+
+/**
+ * The state for the latest read. `records` is undefined until the first read
+ * succeeds. A failed read gives loading false and error true (never an
+ * endless spinner), keeping the last good records, if any.
+ */
+export function historyState(
+  records: readonly ScanRecord[] | undefined,
+  failed: boolean,
+  filter: HistoryFilter,
+  query: string,
+): HistoryState {
+  if (failed) return { ...buildHistoryState(records ?? [], filter, query), error: true };
+  return records === undefined ? LOADING_HISTORY : buildHistoryState(records, filter, query);
+}

@@ -3,10 +3,11 @@
 // the cache. fetch is injectable, so tests never touch the network.
 
 import type { Product } from '../domain/types.ts';
-import { isValidBarcode, normalizeBarcode, offLookupCode } from './barcode.ts';
+import { canonicalBarcode } from './barcode.ts';
 import { OFF_BASE_URL, USER_AGENT } from './config.ts';
 import { OFF_FIELDS } from './fields.ts';
 import { normalizeOffProduct } from './normalize.ts';
+import type { Throttle } from './throttle.ts';
 
 export type OffErrorReason = 'offline' | 'rate_limited' | 'server' | 'timeout' | 'invalid_code';
 
@@ -23,12 +24,22 @@ export interface FetchOffProductOptions {
   timeoutMs?: number;
   /** Clock for the record's fetchedAt and for Retry-After dates. */
   now?: () => Date;
+  /**
+   * The app's shared throttle. Any Retry-After blocks it at once, so other
+   * lookups wait too, and the retry takes a slot from it. The first
+   * request's slot is the caller's to take: createLookup takes it before
+   * calling fetchProduct.
+   */
+  throttle?: Throttle;
 }
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** The single retry happens only when OFF asks us to wait this long or less. */
 export const MAX_RETRY_WAIT_MS = 3_000;
+
+/** A 429 without Retry-After waits one full rate-limit window. */
+export const DEFAULT_RATE_LIMIT_WAIT_MS = 60_000;
 
 const RETRYABLE_STATUS = new Set([429, 503]);
 const TIMEOUT: OffResult = { status: 'error', reason: 'timeout' };
@@ -66,25 +77,35 @@ export function parseRetryAfter(header: string | null, nowMs: number): number | 
  * Not found arrives two ways: HTTP 404, or HTTP 200 with status 0. Both give
  * 'not_found'. 429 gives 'rate_limited'; any other non-2xx status gives
  * 'server'. An abort or the timeout gives 'timeout'; a failed fetch gives
- * 'offline'. An invalid code gives 'invalid_code' without any request.
+ * 'offline'. A code with no canonical form gives 'invalid_code' without any
+ * request; otherwise the canonical key is what OFF is asked for.
  */
 export async function fetchOffProduct(code: string, opts: FetchOffProductOptions = {}): Promise<OffResult> {
-  const digits = normalizeBarcode(code);
-  if (!isValidBarcode(digits)) return { status: 'error', reason: 'invalid_code' };
+  const key = canonicalBarcode(code);
+  if (key === null) return { status: 'error', reason: 'invalid_code' };
 
   const fetchImpl = opts.fetchImpl ?? fetch;
   const now = opts.now ?? (() => new Date());
-  const url = offProductUrl(offLookupCode(digits));
+  const url = offProductUrl(key);
   const deadline = startDeadline(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal);
   try {
     const first = await attempt(fetchImpl, url, deadline.signal, now);
     const wait = retryWait(first, deadline.remainingMs());
-    if (wait === undefined) return first.result;
+    // The retry's slot is taken before the Retry-After block below, so that block cannot refuse it.
+    const retry = wait !== undefined && (opts.throttle?.tryAcquire().allowed ?? true);
+    blockOnRetryAfter(opts.throttle, first.result);
+    if (!retry || wait === undefined) return first.result;
     if (!(await sleep(wait, deadline.signal))) return TIMEOUT;
-    return (await attempt(fetchImpl, url, deadline.signal, now)).result;
+    const second = (await attempt(fetchImpl, url, deadline.signal, now)).result;
+    blockOnRetryAfter(opts.throttle, second);
+    return second;
   } finally {
     deadline.clear();
   }
+}
+
+function blockOnRetryAfter(throttle: Throttle | undefined, result: OffResult): void {
+  if (result.status === 'error' && result.retryAfterMs !== undefined) throttle?.blockFor(result.retryAfterMs);
 }
 
 async function attempt(fetchImpl: typeof fetch, url: string, signal: AbortSignal, now: () => Date): Promise<Attempt> {
@@ -100,8 +121,11 @@ async function attempt(fetchImpl: typeof fetch, url: string, signal: AbortSignal
   const retryable = RETRYABLE_STATUS.has(response.status);
   if (response.status === 404) return { result: { status: 'not_found' }, retryable };
   if (!response.ok) {
-    const reason = response.status === 429 ? 'rate_limited' : 'server';
-    const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'), now().getTime());
+    const limited = response.status === 429;
+    const reason = limited ? 'rate_limited' : 'server';
+    const retryAfterMs =
+      parseRetryAfter(response.headers.get('Retry-After'), now().getTime()) ??
+      (limited ? DEFAULT_RATE_LIMIT_WAIT_MS : undefined);
     const result: OffResult =
       retryAfterMs === undefined ? { status: 'error', reason } : { status: 'error', reason, retryAfterMs };
     return { result, retryable };

@@ -1,6 +1,6 @@
 // Product identity at the top of the Result: an 88 pt thumbnail (the pack
 // photo from Open Food Facts, or a category pictogram), then brand, name,
-// and quantity with category.
+// quantity with category, and the photo credit when a photo shows.
 
 import { useState } from 'react';
 import { Image } from 'expo-image';
@@ -53,6 +53,12 @@ export function ProductHeader({ product }: { product: Product }) {
             {meta}
           </Txt>
         ) : null}
+        {/* Open Food Facts photos are CC BY-SA (the data is ODbL), so a shown photo is credited. */}
+        {showImage ? (
+          <Txt style={styles.credit} tone="ink3">
+            Photo: Open Food Facts contributors (CC BY-SA)
+          </Txt>
+        ) : null}
       </View>
     </View>
   );
@@ -90,5 +96,10 @@ const styles = StyleSheet.create({
     ...text.label,
     fontSize: 12.5,
     lineHeight: 17,
+  },
+  credit: {
+    ...text.label,
+    fontSize: 11,
+    lineHeight: 14,
   },
 });
