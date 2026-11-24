@@ -106,7 +106,7 @@ export function ScoreDial({ score, grade }: ScoreDialProps) {
           variant="numeralXL"
           tone={scored ? 'ink' : 'ink3'}
           align="center"
-          style={styles.numeral}
+          style={[styles.numeral, scored && value >= 100 && styles.numeralLong]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.6}
@@ -136,6 +136,11 @@ const styles = StyleSheet.create({
   numeral: {
     width: 84,
     lineHeight: 44,
+  },
+  // Three digits (a perfect 100) don't fit at full size. A set size keeps them
+  // whole without relying on adjustsFontSizeToFit, which the web build ignores.
+  numeralLong: {
+    fontSize: 28,
   },
   unit: {
     ...text.label,

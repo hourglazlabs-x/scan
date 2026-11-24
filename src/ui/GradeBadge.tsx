@@ -63,7 +63,10 @@ export function GradeBadge({ grade, label, score, size = 'sm' }: GradeBadgeProps
     >
       {stripes ? (
         <View style={styles.stripes}>
-          <HazardStripes />
+          {/* Out of the layout, so the SVG can't size the pill (the web build gives an unsized SVG 300 × 150). */}
+          <View style={StyleSheet.absoluteFill}>
+            <HazardStripes />
+          </View>
         </View>
       ) : null}
       <View style={styles.icon}>
