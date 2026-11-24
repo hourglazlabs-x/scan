@@ -28,6 +28,16 @@
 - **Real Open Food Facts data.** Seven real records are now test fixtures (`test/fixtures/off/real`). They confirmed the UPC-A and UPC-E keys, how `ingredients_n` is set, and that categories run from general to specific. They also found a unit error, now caught by a plausibility check (R25). Their scores are in [RUBRIC.md](RUBRIC.md#scores-of-real-products).
 - **Tests:** all 142 pass.
 
+### Screen check (2026-11-24)
+
+- **Every screen renders.** The app's web build ran in a phone-sized browser. Real EAN-13 and UPC-A barcodes in a simulated camera feed were read by the app's own scanner and looked up against the real Open Food Facts fixtures. Checked: Scan, Result, Breakdown, Incomplete, Index, You and Object mode.
+- **Two layout fixes:**
+  - a perfect 100 cut to "1…" in the score dial
+  - the Incomplete badge's stripes setting the badge's size
+
+  Both came from how the web build sizes text and SVGs. The fixes make every build draw them the same.
+- **Not committed:** the web build needs react-native-web and a few preview-only settings.
+
 ## Not verified yet
 
 - **A run on a phone.** These compile against the real packages, but only a device run shows they work:
