@@ -6,12 +6,13 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import { Directory, File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 import { canonicalBarcode } from '../off/barcode.ts';
 import type { CacheStats, HistoryFilter, HistoryState, LookupState, ScanRecord } from './contracts.ts';
 import type { SqlDatabase } from './db.ts';
 import { historyState, toScanRecord } from './history.ts';
-import { DataContext, type DataContextValue } from './provider.tsx';
+import { DataContext, type DataContextValue } from './context.ts';
 import { countCachedProducts, listEntries, queueIngredientPhoto } from './repository.ts';
 
 const PHOTO_DIRECTORY = 'ingredient-photos';
@@ -160,6 +161,8 @@ function photoFileName(key: string, photoUri: string, at: Date): string {
  * FileSystem.copyAsync({ from, to }) under FileSystem.documentDirectory.
  */
 function copyIntoDocuments(photoUri: string, fileName: string): string {
+  // The web build has no file system: the photo stays the data URI the camera returned.
+  if (Platform.OS === 'web') return photoUri;
   const directory = new Directory(Paths.document, PHOTO_DIRECTORY);
   if (!directory.exists) directory.create({ intermediates: true });
   const target = new File(directory, fileName);

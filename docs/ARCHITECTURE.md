@@ -55,6 +55,18 @@ All decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
 The schema version lives in `PRAGMA user_version`. Migrations run when the app starts.
 
+## Web version
+
+The same code builds for the web (`npm run build:web`) and is served by GitHub Pages at https://hourglazlabs-x.github.io/scan/. Three parts differ on the web:
+
+| Part | Phone | Web |
+| --- | --- | --- |
+| Storage | expo-sqlite | sql.js (SQLite compiled to WebAssembly), saved whole to IndexedDB after writes (`src/data/webDb.tsx`). expo-sqlite's web build needs cross-origin isolation headers, which GitHub Pages can't send. |
+| Barcode reading | the phone's native scanner | expo-camera's web scanner: the browser's BarcodeDetector where there is one, otherwise a zxing WebAssembly decoder served from the site (`src/ui/scannerSetup.web.ts`) |
+| Open Food Facts requests | with the app's User-Agent | without it, since browsers don't allow one; Open Food Facts allows cross-origin reads |
+
+Both storage back ends build the same context (`src/data/context.ts`), so lookups, history and scoring are shared code.
+
 ## Offline pack
 
 `scripts/build-pack.ts` turns Open Food Facts' bulk export into a SQLite pack of the most-scanned US products, with scores already calculated. It isn't wired into the app yet. The next step is to download a pack on first launch over Wi-Fi and merge it into `products`.

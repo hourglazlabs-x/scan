@@ -14,13 +14,16 @@
     "test": "node --test test/*.test.ts",
     "lint": "expo lint",
     "build-pack": "node scripts/build-pack.ts",
-    "check:release": "node scripts/check-release.ts"
+    "check:release": "node scripts/check-release.ts",
+    "build:web": "bash scripts/build-web.sh",
+    "deploy:web": "bash scripts/deploy-web.sh"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@expo-google-fonts/michroma": "^0.4.2",
     "@react-native-community/netinfo": "12.0.1",
+    "barcode-detector": "^3.2.5",
     "expo": "^58.0.26",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.16",
@@ -38,7 +41,8 @@
     "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
-    "react-native-svg": "15.16.0"
+    "react-native-svg": "15.16.0",
+    "react-native-web": "~0.21.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
@@ -46,6 +50,7 @@
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
     "prettier": "^3.10.1",
+    "sql.js": "^1.13.0",
     "typescript": "^6.0.3"
   }
 }

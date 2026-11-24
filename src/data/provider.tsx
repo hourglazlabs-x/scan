@@ -2,27 +2,22 @@
 // the context that the hooks in hooks.ts read. Wrap the app once, near the
 // root. Children render only once the database is open and migrated; if it
 // cannot be opened, a plain message replaces the app instead of a crash.
+//
+// On the phone the database is expo-sqlite. The web build uses sql.js instead
+// (webDb.tsx): expo-sqlite's web version needs cross-origin isolation headers,
+// which static hosting such as GitHub Pages can't send.
 
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 
-import { fetchOffProduct } from '../off/client.ts';
-import { createThrottle } from '../off/throttle.ts';
-import { RUBRIC } from '../rubric/index.ts';
-import type { Rubric } from '../rubric/schema.ts';
 import { color, radius, space } from '../theme/tokens.ts';
-import { DATABASE_NAME, migrateDbIfNeeded, type SqlDatabase } from './db.ts';
-import { createLookup } from './lookup.ts';
-import { createProductCache, recordScan } from './repository.ts';
-import {
-  createChangeEmitter,
-  createScanLookup,
-  notifyOnWrite,
-  type ChangeEmitter,
-  type ScanLookup,
-} from './session.ts';
+import { createDataContext, DataContext } from './context.ts';
+import { DATABASE_NAME, migrateDbIfNeeded } from './db.ts';
+import { WebDataProvider } from './webDb.tsx';
+
+export { DataContext, type DataContextValue } from './context.ts';
 
 /*
  * NetInfo's reachability check fetches https://clients3.google.com/generate_204
@@ -34,49 +29,6 @@ import {
  * returns false, and isInternetReachable then stays null.
  */
 NetInfo.configure({ reachabilityShouldRun: () => false });
-
-/** OFF's rate limit is per IP, so one throttle serves the whole app. */
-const throttle = createThrottle();
-
-export interface DataContextValue {
-  db: SqlDatabase;
-  rubric: Rubric;
-  /** Cache first, then OFF. Shared per code while in flight; records only with { record: true }. Never rejects. */
-  lookup: ScanLookup;
-  /** Fires after a scan is recorded or a product is saved to the cache, so history and cache stats reload. */
-  changes: ChangeEmitter;
-  now: () => Date;
-}
-
-export const DataContext = createContext<DataContextValue | null>(null);
-
-const warn = (what: string) => (error: unknown) => console.warn(`[data] ${what}`, error);
-
-function createDataContext(db: SqlDatabase): DataContextValue {
-  const now = () => new Date();
-  const changes = createChangeEmitter();
-  const { lookup } = createLookup({
-    cache: notifyOnWrite(createProductCache(db), changes.emit),
-    fetchProduct: (code) => fetchOffProduct(code, { throttle }),
-    throttle,
-    rubric: RUBRIC,
-    now,
-    onError: warn('product cache failed'),
-  });
-  return {
-    db,
-    rubric: RUBRIC,
-    lookup: createScanLookup({
-      lookup,
-      recordScan: (code) => recordScan(db, code, now()),
-      onRecorded: changes.emit,
-      onError: warn('lookup failed'),
-      now,
-    }),
-    changes,
-    now,
-  };
-}
 
 function DataContextProvider({ children }: { children: ReactNode }) {
   // expo-sqlite's SQLiteDatabase satisfies SqlDatabase (see db.ts).
@@ -96,6 +48,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [failure]);
 
   if (failure !== null) return <StorageFailure />;
+  if (Platform.OS === 'web') return <WebDataProvider onError={onError}>{children}</WebDataProvider>;
   return (
     <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded} onError={onError}>
       <DataContextProvider>{children}</DataContextProvider>
@@ -105,13 +58,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
 /** Shown instead of the app when the database cannot be opened or migrated. */
 function StorageFailure() {
+  const web = Platform.OS === 'web';
   return (
     <View style={styles.ground}>
       <View style={styles.plate} accessibilityRole="alert">
         <Text style={styles.title}>Storage unavailable</Text>
         <Text style={styles.body}>
-          MINDMODX Scan could not open its storage on this phone, so scanning and the Index cannot work right now.
-          Close the app completely and open it again. If this keeps happening, check that the phone has free space.
+          {web
+            ? 'MINDMODX Scan could not open its storage in this browser, so scanning and the Index cannot work right now. Reload the page. If this keeps happening, check that the browser allows this site to store data.'
+            : 'MINDMODX Scan could not open its storage on this phone, so scanning and the Index cannot work right now. Close the app completely and open it again. If this keeps happening, check that the phone has free space.'}
         </Text>
       </View>
     </View>

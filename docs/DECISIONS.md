@@ -54,3 +54,12 @@ Newest at the bottom. "Founder" means the founder chose or approved it. "Lead" m
 | R24 | **Expo SDK 58** (React Native 0.88, React 19.3), the current release. | Expo Go 58 is on the App Store, so the prototype still needs no Apple Developer account (P6). | Lead |
 | R25 | **Implausible nutrient values are dropped, not scored:** salt above 2.5 g per 100 ml in a drink, and saturated fat above total fat. Saturated fat is 0 when total fat is 0. A dropped value counts as missing, so the product shows as Incomplete. | A real record for a 12 oz cola enters sodium in grams instead of milligrams, which would score as 31.7 g salt per 100 ml. | Lead |
 | R26 | **Seven real Open Food Facts records join the synthetic fixtures** (updates R14). They're credited under the ODbL in their folder's README. The synthetic fixtures stay for edge cases real data rarely shows. | Real records found the unit error in R25 and confirmed the barcode keys (R7, R21). | Lead |
+
+## Web version (2026-11-24)
+
+| # | Decision | Why | By |
+| --- | --- | --- | --- |
+| R27 | **A web version on GitHub Pages,** at https://hourglazlabs-x.github.io/scan/. It's public and asks search engines not to list it. | The founder wants to scan any food with the iPhone camera without Terminal or an Apple Developer account. Expo's web build reuses every screen and the whole scoring engine. | Founder |
+| R28 | **Web storage is sql.js, saved whole to IndexedDB after writes.** The same SQL and migrations run as on the phone. | expo-sqlite's web build needs SharedArrayBuffer, so cross-origin isolation headers, which GitHub Pages can't send. | Lead |
+| R29 | **The web barcode decoder (zxing WebAssembly) is served from the site,** not from the jsDelivr CDN. | Keeps R22: scanning contacts no third party, and a lookup sends only the barcode, to Open Food Facts. | Lead |
+| R30 | **Web requests to Open Food Facts carry no User-Agent header.** | Browsers drop it or turn the request into a CORS preflight. Open Food Facts allows cross-origin reads (Access-Control-Allow-Origin: *). | Lead |

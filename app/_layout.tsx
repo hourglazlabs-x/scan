@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DataProvider } from '../src/data/provider';
+import '../src/ui/scannerSetup';
 import { color } from '../src/theme/tokens';
 
 // Deep links to a product still get the tabs underneath, so Back works.

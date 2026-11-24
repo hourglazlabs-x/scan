@@ -30,6 +30,15 @@
       "expo-splash-screen",
       "expo-status-bar"
     ],
-    "experiments": {}
+    "experiments": {},
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "favicon": "./public/favicon.png",
+      "name": "MINDMODX Scan",
+      "shortName": "Scan",
+      "backgroundColor": "#F2F4F7",
+      "themeColor": "#F2F4F7"
+    }
   }
 }

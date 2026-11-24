@@ -11,3 +11,4 @@ android/
 packs/*.sqlite
 packs/*.sqlite.gz
 .env*
+dist-web/

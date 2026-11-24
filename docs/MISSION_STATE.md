@@ -1,7 +1,7 @@
 # Mission state
 
-**Updated:** 2026-11-22, after the install run
-**Phase:** 1, prototype. The app compiles and builds for iOS, and the logic is tested against real products. It hasn't been opened on a phone yet.
+**Updated:** 2026-11-24, after the web version
+**Phase:** 1, prototype. The app compiles and builds for iOS and the web, and the logic is tested against real products. The web version is the first one the founder can open on a phone.
 
 ## Done
 
@@ -38,6 +38,16 @@
   Both came from how the web build sizes text and SVGs. The fixes make every build draw them the same.
 - **Not committed:** the web build needs react-native-web and a few preview-only settings.
 
+### Web version (2026-11-24)
+
+- **The app runs in a phone's browser** at https://hourglazlabs-x.github.io/scan/ ([DECISIONS.md](DECISIONS.md), R27 to R30). It uses the camera, looks up any barcode live on Open Food Facts, and keeps the Index in the browser.
+- **Tested in Chromium at phone size:**
+  - a real barcode in a simulated camera feed, read by the web scanner, with the jsDelivr CDN blocked
+  - a live Open Food Facts lookup
+  - the Index still there after a full reload
+  - a deep link to a product
+- **Not tested:** Safari on an iPhone, which can only be checked on the phone itself.
+
 ## Not verified yet
 
 - **A run on a phone.** These compile against the real packages, but only a device run shows they work:
@@ -54,7 +64,7 @@ Nothing is blocked. Network access and the GitHub repo are done. The repo, [`hou
 
 ## Next steps, in order
 
-1. **First device run (founder).** Install Expo Go, then follow the README steps. Scan 20 well-known US products and review their scores.
+1. **First phone run (founder).** Open the web version in Safari on the iPhone, or follow the README's Expo Go steps. Scan 20 well-known US products and review their scores.
 2. **Rubric v1 (founder).** Decide the weights, the additive list, the bonuses and the grade bands, and check every source. See [RUBRIC.md](RUBRIC.md#decisions-for-the-founder).
 3. **Cut-short ingredient lists.** Find a signal in Open Food Facts records for an incomplete list, so such products show as Incomplete instead of scoring clean ([RUBRIC.md](RUBRIC.md#known-issues-with-the-draft-weights)).
 4. **Offline pack in the app.** Download a pack over Wi-Fi on first launch and merge it into the cache.
